@@ -90,7 +90,6 @@ private var picker: PiecePicker? = null // 拆开挑选
 private lateinit var pickBox: LinearLayout
 private lateinit var pickScroll: ScrollView
 private lateinit var pickLabel: TextView
-private lateinit var unitTabs: List<TextView>
     private var shown = false
     private var wDp = prefs.panelW
     private var hDp = prefs.panelH
@@ -540,17 +539,14 @@ return true
         return false
     }
 
-// ---------------- 拆开挑选 ----------------
+// ---------------- 拆开挑选（像 Word 一样自由选择） ----------------
 
 private fun buildPickBox() {
 pickBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
 val bar = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
 bar.addView(pillButton("← 返回", false) { closePicker() }.apply { (layoutParams as LinearLayout.LayoutParams).marginStart = 0 })
 bar.addView(View(ctx), LinearLayout.LayoutParams(0, 1, 1f))
-bar.addView(TextView(ctx).apply { text = "按"; setTextColor(cSub); textSize = 12f; setPadding(0, 0, dp(4), 0) })
-unitTabs = PiecePicker.UNIT_NAMES.mapIndexed { i, name ->
-tabView(name) { picker?.setUnit(i) }.also { bar.addView(it) }
-}
+bar.addView(pillButton("全选", false) { picker?.selectAll() })
 pickBox.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36)))
 pickScroll = ScrollView(ctx).apply {
 isVerticalScrollBarEnabled = true; isFocusable = false
@@ -572,13 +568,12 @@ panel.addView(pickBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PA
 private fun openPicker(item: ClipItem) {
 if (editing) stopEditing()
 val pk = PiecePicker(
-ctx, item.text, prefs.pickUnit, cAccent,
+ctx, item.text, cAccent,
 mods = { (if (ctrlHeld) KeyEvent.META_CTRL_ON else 0) or (if (shiftHeld) KeyEvent.META_SHIFT_ON else 0) },
 onChange = { updatePickUi() },
-onDoubleTap = { actPiece(MODE_DEFAULT) },
 ).apply {
 setTextColor(cText)
-setPadding(dp(12), dp(10), dp(12), dp(10))
+setPadding(dp(14), dp(12), dp(14), dp(12))
 }
 picker = pk
 picked.clear()
@@ -591,8 +586,7 @@ updatePickUi()
 }
 
 private fun closePicker() {
-val pk = picker ?: return
-prefs.pickUnit = pk.unit
+if (picker == null) return
 picker = null
 pickScroll.removeAllViews()
 pickBox.visibility = View.GONE
@@ -600,24 +594,21 @@ search.visibility = View.VISIBLE; scroll.visibility = View.VISIBLE
 refresh()
 }
 
+private var pickHint: String? = null
+
 private fun updatePickUi() {
 val pk = picker ?: return
-unitTabs.forEachIndexed { i, v ->
-val on = pk.unit == i
-v.setTextColor(if (on) cAccent else cSub)
-v.paint.isFakeBoldText = on
-v.background = if (on) round(0x1F4C8DF6, dp(8).toFloat()) else null
-v.invalidate()
-}
-pickLabel.text = if (pk.hasPick()) "已选 ${pk.selectedChars()} 字 · Enter 粘贴 · Ctrl+C 复制"
-else "点选片段，Ctrl+点击加选，拖动自由选择\n↑↓ 移动 · 空格加选 · Tab 切换 句/行/词"
+pickLabel.setTextColor(if (pickHint != null) cAccent else cSub)
+pickLabel.text = pickHint ?: if (pk.hasPick()) "已选 ${pk.selectedChars()} 字 · Enter 粘贴 · Ctrl+C 复制"
+else "拖动选择，双击选词，三击选段；Ctrl+单击加选一句\nShift+方向键扩选，Ctrl+Shift+←→ 按词扩选"
+pickHint = null
 }
 
 private fun actPiece(mode: Int) {
 val pk = picker ?: return
+if (!pk.hasPick()) { pickHint = "先选中要粘贴的文字（Ctrl+A 全选）"; updatePickUi(); return }
 val text = pk.result()
 if (text.isBlank()) return
-prefs.pickUnit = pk.unit
 onAct(text, mode) {
 val bmp = pk.chip(text, cCard, cAccent, cText, maxW = pk.width.coerceAtLeast(dp(120)))
 if (bmp == null) emptyList() else {
@@ -631,32 +622,18 @@ if (prefs.closeOnSelect) dismiss() else closePicker()
 
 private fun handlePickKey(e: KeyEvent): Boolean {
 val pk = picker ?: return false
-val shift = e.isShiftPressed
 if (e.isAltPressed || e.isMetaPressed) return false
-if (e.isCtrlPressed) {
-when (e.keyCode) {
-KeyEvent.KEYCODE_A -> pk.selectAll()
-KeyEvent.KEYCODE_V -> actPiece(MODE_PASTE)
-KeyEvent.KEYCODE_C -> actPiece(MODE_COPY)
-KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_LEFT -> pk.move(-1, shift)
-KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT -> pk.move(1, shift)
-else -> return false
+if (e.isCtrlPressed && !e.isShiftPressed) when (e.keyCode) {
+KeyEvent.KEYCODE_A -> { pk.selectAll(); return true }
+KeyEvent.KEYCODE_V -> { actPiece(MODE_PASTE); return true }
+KeyEvent.KEYCODE_C -> { actPiece(MODE_COPY); return true }
 }
-return true
-}
+if (pk.handleKey(e)) return true
+if (e.isCtrlPressed) return false
 when (e.keyCode) {
 KeyEvent.KEYCODE_ESCAPE -> if (pk.hasPick()) pk.clear() else closePicker()
 KeyEvent.KEYCODE_DEL -> closePicker()
-KeyEvent.KEYCODE_TAB -> pk.cycleUnit()
-KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_LEFT -> pk.move(-1, shift)
-KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT -> pk.move(1, shift)
-KeyEvent.KEYCODE_MOVE_HOME -> pk.move(-pk.segmentCount, shift)
-KeyEvent.KEYCODE_MOVE_END -> pk.move(pk.segmentCount, shift)
-KeyEvent.KEYCODE_PAGE_UP -> pk.move(-5, shift)
-KeyEvent.KEYCODE_PAGE_DOWN -> pk.move(5, shift)
-KeyEvent.KEYCODE_SPACE -> pk.toggleCursor()
 KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> actPiece(MODE_DEFAULT)
-KeyEvent.KEYCODE_1, KeyEvent.KEYCODE_2, KeyEvent.KEYCODE_3 -> pk.setUnit(e.keyCode - KeyEvent.KEYCODE_1)
 else -> return e.unicodeChar != 0 // 吞掉普通字符，避免误输入到后面的应用
 }
 return true

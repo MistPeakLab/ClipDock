@@ -68,11 +68,6 @@ class Prefs(context: Context) {
         get() = sp.getInt("merge_mode", 0)
         set(v) = sp.edit().putInt("merge_mode", v).apply()
 
-    /** 拆开挑选时上次用的切分方式：0 句 1 行 2 词 */
-    var pickUnit: Int
-        get() = sp.getInt("pick_unit", 0)
- set(v) = sp.edit().putInt("pick_unit", v).apply()
-
     /** 面板上次停留的标签：0 最近 1 常用语 */
     var panelTab: Int
  get() = sp.getInt("panel_tab", 0)
