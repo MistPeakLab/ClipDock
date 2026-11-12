@@ -30,6 +30,7 @@ class PiecePicker(
 ctx: Context,
 val full: String,
 private val cAccent: Int,
+private val cCard: Int,
 private val mods: () -> Int,
 private val onChange: () -> Unit,
 ) : TextView(ctx) {
@@ -54,7 +55,16 @@ private var anchor = 0
 private var caret = 0
 private var wantX = -1f // ↑↓ 移动时保持的横向位置
 
-private val selPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = (cAccent and 0x00FFFFFF) or 0x4D000000 }
+// 选区卡片：实底 + 阴影、强调色浅底、描边
+private val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+color = cCard
+setShadowLayer(7 * d, 0f, 2 * d, (cAccent and 0x00FFFFFF) or 0x55000000)
+}
+private val tintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = (cAccent and 0x00FFFFFF) or 0x24000000 }
+private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+style = Paint.Style.STROKE; strokeWidth = 1.2f * d; color = (cAccent and 0x00FFFFFF) or 0x99000000.toInt()
+}
+private val tmp = Path()
 private val caretPaint = Paint().apply { color = cAccent; strokeWidth = 2 * d }
 private val handlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = cAccent }
 private val path = Path()
@@ -224,15 +234,44 @@ return true
 
 // ---------------- 绘制 ----------------
 
+/** 一段选区的卡片外形：每行一个圆角矩形，相邻行互相重叠后合并成一个整体 */
+private fun cardPath(r: IntRange) {
+val l = layout
+path.reset()
+val fm = paint.fontMetrics
+val padX = 4 * d; val padY = 3.5f * d; val rad = 7 * d
+val first = l.getLineForOffset(r.first)
+val last = l.getLineForOffset(r.last + 1).let { if (it > first && l.getLineStart(it) == r.last + 1) it - 1 else it }
+var prevBottom = Float.NaN
+for (line in first..last) {
+val ls = l.getLineStart(line); val le = l.getLineEnd(line)
+val s = maxOf(r.first, ls)
+var e = minOf(r.last + 1, le)
+while (e > s && full[e - 1] == '\n') e--
+val x1 = l.getPrimaryHorizontal(s)
+var x2 = if (e >= le) l.getLineRight(line) else l.getPrimaryHorizontal(e)
+if (e <= s) x2 = x1 + 4 * d
+val base = l.getLineBaseline(line).toFloat()
+var top = base + fm.ascent - padY
+val bottom = base + fm.descent + padY
+if (!prevBottom.isNaN() && top > prevBottom) top = prevBottom // 与上一行接上
+tmp.reset()
+tmp.addRoundRect(minOf(x1, x2) - padX, top, maxOf(x1, x2) + padX, bottom, rad, rad, Path.Direction.CW)
+if (line == first) path.set(tmp) else path.op(tmp, Path.Op.UNION)
+prevBottom = bottom
+}
+}
+
 override fun onDraw(canvas: Canvas) {
 val l = layout
 if (l != null) {
 canvas.save()
 canvas.translate(totalPaddingLeft.toFloat(), totalPaddingTop.toFloat())
 for (r in ranges()) {
-path.reset()
-l.getSelectionPath(r.first, r.last + 1, path)
-canvas.drawPath(path, selPaint)
+cardPath(r)
+canvas.drawPath(path, cardPaint)
+canvas.drawPath(path, tintPaint)
+canvas.drawPath(path, strokePaint)
 }
 canvas.restore()
 }

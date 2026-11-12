@@ -568,7 +568,7 @@ panel.addView(pickBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PA
 private fun openPicker(item: ClipItem) {
 if (editing) stopEditing()
 val pk = PiecePicker(
-ctx, item.text, cAccent,
+ctx, item.text, cAccent, cCard,
 mods = { (if (ctrlHeld) KeyEvent.META_CTRL_ON else 0) or (if (shiftHeld) KeyEvent.META_SHIFT_ON else 0) },
 onChange = { updatePickUi() },
 ).apply {
