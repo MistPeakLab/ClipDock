@@ -61,6 +61,7 @@ fun SettingsPage() {
      Group("粘贴") {
   Toggle("Enter / 点击后直接粘贴到输入框", "需要增强模式。关闭时 Enter 和点击只复制；Ctrl+V 与“粘贴”按钮始终直接粘贴，Ctrl+C 始终只复制", prefs.autoPaste) { prefs.autoPaste = it; upd() }
          Toggle("粘贴前清理格式", "去掉零宽字符、行尾空格、多余空行和首尾空白；不改动原记录", prefs.cleanText) { prefs.cleanText = it; upd() }
+  Toggle("粘贴动画", "直接粘贴时，选中的卡片飞向输入框光标；多选会先叠成一摞再飞过去", prefs.pasteAnim) { prefs.pasteAnim = it; upd() }
          Choice("多条合并时的分隔", listOf("换行", "空一行", "空格", "直接连接"), prefs.mergeMode) { prefs.mergeMode = it; upd() }
      }
      Group("记录") {

@@ -57,7 +57,7 @@ object PanelHost {
         val prefs = Prefs(host)
         panel = PanelController(
             host, host.getSystemService(WindowManager::class.java), prefs, type, focusable,
-     onAct = { text, mode -> act(host, prefs, text, mode) },
+     onAct = { text, mode, cards -> act(host, prefs, text, mode, cards) },
      onFocused = { ClipReader.capture(host) },
      onDismiss = { panel = null },
         ).also { it.show() }
@@ -71,13 +71,13 @@ object PanelHost {
     fun handleModifier(e: KeyEvent) { panel?.handleModifier(e) }
 
     /** 写入剪贴板；需要时直接粘贴到当前输入框（增强模式），否则提示按 Ctrl+V */
-    private fun act(ctx: Context, prefs: Prefs, text: String, mode: Int) {
+    private fun act(ctx: Context, prefs: Prefs, text: String, mode: Int, cards: () -> List<FlyCard>) {
         val t = TextTools.prepare(prefs, text)
         ClipReader.write(ctx, t)
         val paste = when (mode) { MODE_PASTE -> true; MODE_COPY -> false; else -> prefs.autoPaste }
  if (!paste) return
  val svc = ClipService.instance
-        if (svc != null) svc.pasteIntoFocusedLater(t)
+        if (svc != null) svc.pasteIntoFocusedLater(t, if (prefs.pasteAnim) cards() else emptyList())
         else android.widget.Toast.makeText(ctx, "已复制，按 Ctrl+V 粘贴（开启增强模式后可直接粘贴）", android.widget.Toast.LENGTH_SHORT).show()
     }
 }

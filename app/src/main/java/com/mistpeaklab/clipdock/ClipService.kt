@@ -62,9 +62,62 @@ class ClipService : AccessibilityService() {
      * 把文字粘贴进当前焦点输入框：先试标准的“粘贴”动作；
      * 不支持的控件改为在光标处插入文字。稍等一下，让面板先收起、焦点回到输入框。
      */
-    fun pasteIntoFocusedLater(text: String) {
-        main.postDelayed({ pasteInto(text) }, 180)
+    fun pasteIntoFocusedLater(text: String, cards: List<FlyCard> = emptyList()) {
+ if (cards.isEmpty() || !android.animation.ValueAnimator.areAnimatorsEnabled()) {
+     cards.forEach { it.bmp.recycle() }
+     main.postDelayed({ pasteInto(text) }, 180)
+     return
+ }
+ flyThenPaste(text, cards, retry = true)
     }
+
+    /** 找到输入框光标位置，卡片飞过去，落地时粘贴；找不到输入框就直接走原来的流程 */
+    private fun flyThenPaste(text: String, cards: List<FlyCard>, retry: Boolean) {
+ val node = editableFocus()
+ // 刚从面板搜索框退出时，焦点还没回到原输入框：稍等再找一次
+ if ((node == null || node.packageName == packageName) && retry) {
+     main.postDelayed({ flyThenPaste(text, cards, retry = false) }, 160)
+     return
+ }
+ val target = node?.takeIf { it.packageName != packageName }?.let(::caretRect)
+ if (target == null) {
+     cards.forEach { it.bmp.recycle() }
+     pasteInto(text)
+     return
+ }
+ PasteFly.run(this, wm, cards, target) { pasteInto(text) }
+    }
+
+    private fun editableFocus(): AccessibilityNodeInfo? = runCatching {
+ (findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT))
+     ?.takeIf { it.isEditable }
+    }.getOrNull()
+
+    /** 光标在屏幕上的位置：优先取光标前一个字符的精确位置，取不到就用输入框左上部 */
+    private fun caretRect(node: AccessibilityNodeInfo): android.graphics.RectF? = runCatching {
+ val box = android.graphics.Rect().also { node.getBoundsInScreen(it) }
+ if (box.isEmpty) return null
+ val len = if (node.isShowingHintText) 0 else node.text?.length ?: 0
+ val sel = node.textSelectionEnd.let { if (it in 0..len) it else len }
+ val key = AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_KEY
+ if (len > 0 && node.availableExtraData?.contains(key) == true) {
+     val idx = if (sel > 0) sel - 1 else 0
+     val args = android.os.Bundle().apply {
+  putInt(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_ARG_START_INDEX, idx)
+  putInt(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_ARG_LENGTH, 1)
+     }
+     if (node.refreshWithExtraData(key, args)) {
+  val r = node.extras.getParcelableArray(key, android.graphics.RectF::class.java)?.getOrNull(0)
+  if (r != null && r.height() > 0 && box.contains(r.centerX().toInt(), r.centerY().toInt())) {
+      val x = if (sel > 0) r.right else r.left
+      return android.graphics.RectF(x, r.top, x + 2, r.bottom)
+  }
+     }
+ }
+ val d = resources.displayMetrics.density
+ val cy = box.top + minOf(box.height() / 2f, 24 * d)
+ android.graphics.RectF(box.left + 16 * d, cy - 10 * d, box.left + 16 * d + 2, cy + 10 * d)
+    }.getOrNull()
 
     private fun pasteInto(text: String) {
         val node = findFocus(AccessibilityNodeInfo.FOCUS_INPUT)

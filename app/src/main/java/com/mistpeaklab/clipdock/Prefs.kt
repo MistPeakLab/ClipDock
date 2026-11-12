@@ -57,6 +57,9 @@ class Prefs(context: Context) {
     // 粘贴
     var autoPaste by bool("auto_paste", true)
 
+    /** 粘贴时卡片飞向光标的动画 */
+    var pasteAnim by bool("paste_anim", true)
+
     /** 粘贴前清理格式（零宽字符、行尾空白、多余空行、首尾空白） */
     var cleanText by bool("clean_text", false)
 
@@ -64,6 +67,11 @@ class Prefs(context: Context) {
     var mergeMode: Int
         get() = sp.getInt("merge_mode", 0)
         set(v) = sp.edit().putInt("merge_mode", v).apply()
+
+    /** 拆开挑选时上次用的切分方式：0 句 1 行 2 词 */
+    var pickUnit: Int
+        get() = sp.getInt("pick_unit", 0)
+ set(v) = sp.edit().putInt("pick_unit", v).apply()
 
     /** 面板上次停留的标签：0 最近 1 常用语 */
     var panelTab: Int
