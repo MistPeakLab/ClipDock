@@ -7,7 +7,7 @@
 **给接了键盘的安卓平板，补上它一直缺的那个 Win + V。**
 
 一款面向 **Android 平板 + 实体键盘** 的悬浮剪贴板历史管理器（Clipboard Manager）<br>
-后台自动记录复制内容 · 快捷键唤起悬浮面板 · 多选合并粘贴 · 完全离线
+后台自动记录复制内容 · 快捷键唤起悬浮面板 · 多选合并粘贴 · 拆开挑选部分粘贴 · 完全离线
 
 ![Android](https://img.shields.io/badge/Android-15%2B-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?logo=kotlin&logoColor=white)
@@ -45,6 +45,41 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 <p align="center"><img src="docs/screenshots/shortcut-open.jpg" width="820" alt="Win + V 唤出面板"></p>
 
 <p align="center"><img src="docs/screenshots/shortcut-multi.jpg" width="820" alt="Ctrl + A / Ctrl + V 多选粘贴"></p>
+
+---
+
+## 长长一段，只贴你要的那几个字
+
+复制了一整条快递短信，其实只想要运单号；复制了一段会议纪要，其实只想要那个邮箱。
+以前只能整段贴进去，再一点点删。
+
+现在在面板里选中那一条，按 `→`（或点卡片上的 ✂），它会**展开成全文**，像在 Word 里一样**自由选择**：拖到哪选到哪，双击选词，三击选段。选中的文字会托起成一张小卡片，按 `Enter`，就只把这几个字贴进去。
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/pick-mouse.jpg" alt="鼠标双击选中网址"></td>
+<td width="50%"><img src="docs/screenshots/pick-touch.jpg" alt="触屏长按选择，拖动手柄调整"></td>
+</tr>
+<tr>
+<td align="center"><b>鼠标：双击选词</b><br>网址、邮箱、电话、单号会被整块识别，一下就选中</td>
+<td align="center"><b>触屏：长按选择</b><br>两端出现手柄，拖动调整范围，跨行也能选</td>
+</tr>
+</table>
+
+| 操作 | 鼠标 / 触屏 | 键盘 |
+|---|---|---|
+| 展开一条 | 点卡片上的 ✂ | `→` |
+| 放光标 / 自由选择 | 单击 / 拖动；触屏长按后拖动、拖手柄 | `←` `→` 逐字，`↑` `↓` 逐行，加 `Shift` 扩选 |
+| 选词 / 选段 | 双击 / 三击（双击后接着拖，按词扩展） | `Ctrl + Shift + ←→` 按词扩选 |
+| 行首行尾 / 全文首尾 | — | `Home` `End` / `Ctrl + Home` `Ctrl + End` |
+| 加选不相连的几段 | `Ctrl + 拖动`；`Ctrl + 单击` 加选一句 | — |
+| 全选 | 右上角“全选” | `Ctrl + A` |
+| 粘贴 / 只复制 | 底部按钮 | `Enter` 或 `Ctrl + V` / `Ctrl + C` |
+| 返回列表 | “← 返回” | `Esc`（先取消选择，再按一次返回）/ `Backspace` |
+
+不相连的几段会按原文顺序拼起来：原文中间隔着换行就换行，隔着空格就空一格。
+
+粘贴的那一刻，选中的内容会变成一张小卡片，沿弧线**飞进输入框的光标**，落地时泛起一圈涟漪；多选时几张卡片先叠成一摞再飞过去。不喜欢可以在设置里关掉“粘贴动画”。
 
 ---
 
@@ -100,7 +135,7 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 | 直接打字 | 搜索 |
 | `↑` `↓` `Enter` / 点击 | 选择并粘贴 |
 | `1` – `9` | 快速粘贴第几条（未搜索时） |
-| `Tab` | 切换“最近 / 常用语” |
+| `Tab` | 切换
 | `Ctrl + A` | 全选 |
 | `Ctrl + 点击` / 长按 | 加选 / 取消 |
 | `Shift + 点击` / `Shift + ↑↓` | 连续选择一段 |
@@ -120,6 +155,7 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 - **常用语**：邮箱、地址、固定回复放这里，永不过期，可编辑、可排序，面板里按 Tab 就能切过去
 - **粘贴前清理格式**：去掉零宽字符、行尾空格、多余空行，从网页复制的内容终于干净了（不改动原记录）
 - **多条合并**：Ctrl+A 或 Ctrl+点击选几条，Ctrl+V 一次贴进去；分隔可选换行 / 空一行 / 空格 / 直接连接
+- **粘贴动画**：卡片飞进光标，落点泛起涟漪，多选时先叠成一摞；可在设置里关闭
 - **三种唤起方式**：快捷键、桌面图标（可设为直接弹面板）、通知栏快捷开关
 
 ---
@@ -216,6 +252,8 @@ cd ClipDock
 app/src/main/java/com/mistpeaklab/clipdock/
 ├── ClipService.kt       无障碍服务：后台记录（焦点探针）、全局快捷键、自动粘贴
 ├── PanelController.kt   悬浮面板：搜索、标签、多选、拖动、缩放、键盘操作
+├── PiecePicker.kt       拆开挑选：像 Word 一样自由选择文字（自绘选区、光标、手柄）
+├── PasteFly.kt          粘贴动画：卡片飞向输入框光标
 ├── PanelHost.kt         按权限档位决定面板怎么显示；剪贴板读写
 ├── ClipStore.kt         历史记录与常用语（本地 JSON）、文字清理
 ├── Prefs.kt             设置项与快捷键
@@ -251,6 +289,8 @@ On Android, `Ctrl + V` only pastes the latest copy. Reaching older items means s
 - **`Win + V` (customizable) opens a floating panel** that never steals focus from your text field and never pops up the soft keyboard
 - **Type to search**, `↑ ↓ Enter` or `1–9` to paste, `Tab` for saved snippets
 - **Desktop-style multi-select**: `Ctrl + A`, `Ctrl + click`, `Shift + click`, then `Ctrl + V` pastes them merged, straight into the input field
+- **Paste just part of an item**: press `→` to expand a long item and select freely like in Word (drag, double-click a word, triple-click a paragraph, `Shift + arrows`, touch handles), then `Enter` pastes only that part
+- **Paste animation**: the selected cards fly into the text cursor
 - Pinned items, saved snippets, optional text cleanup, resizable panel, tablet-friendly main UI
 - **Fully offline**: no `INTERNET` permission, text only, stored locally
 
