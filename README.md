@@ -304,6 +304,12 @@ Requires Android 15+. The UI is currently Chinese only.
 
 ---
 
+## 🔗 友情链接
+
+[LINUX DO](https://linux.do/) —— 真诚分享、友好讨论的技术社区，本项目的交流与反馈也发布于此
+
+---
+
 <div align="center">
 
 **随手复制，随时贴。**
