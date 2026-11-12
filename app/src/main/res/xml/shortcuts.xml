@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+ android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="panel"
+        android:shortcutShortLabel="@string/shortcut_panel">
+ <intent
+     android:action="android.intent.action.VIEW"
+     android:targetClass="com.mistpeaklab.clipdock.PanelActivity"
+            android:targetPackage="com.mistpeaklab.clipdock" />
+    </shortcut>
+    <shortcut
+ android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="main"
+        android:shortcutShortLabel="@string/shortcut_main">
+        <intent
+     android:action="android.intent.action.VIEW"
+     android:targetClass="com.mistpeaklab.clipdock.MainActivity"
+     android:targetPackage="com.mistpeaklab.clipdock" />
+    </shortcut>
+</shortcuts>
