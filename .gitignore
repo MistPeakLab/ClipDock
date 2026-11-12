@@ -17,6 +17,7 @@ docs/design/
 design/
 
 # 签名密钥与密码，绝不能提交
+keys/
 keystore.properties
 *.jks
 *.keystore
