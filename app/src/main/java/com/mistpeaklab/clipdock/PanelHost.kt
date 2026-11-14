@@ -27,9 +27,19 @@ object ClipReader {
     /** 本应用自己的窗口在前台时读取并记录，结果写进诊断 */
     fun capture(ctx: Context, trigger: String): Boolean {
         val r = captureResult(ctx)
-        Diag.log(trigger, null, r ?: Diag.EMPTY)
-        return r != null && r != Diag.EMPTY
+        val empty = r == null || r == Diag.EMPTY
+        Diag.log(trigger, null, r ?: Diag.EMPTY, if (empty) emptyReason(ctx) else null)
+        return !empty
     }
+
+    /** 没读到文字时，说清楚是哪一种：真的空、系统没放行，还是里面放的不是文字（图片、文件） */
+    fun emptyReason(ctx: Context): String = runCatching {
+        val clip = ctx.getSystemService(ClipboardManager::class.java).primaryClip
+        when {
+            clip == null || clip.itemCount == 0 -> "剪贴板是空的，或系统没放行"
+            else -> "里面不是文字：" + (0 until clip.description.mimeTypeCount).joinToString { clip.description.getMimeType(it) }
+        }
+    }.getOrDefault("读取时出错")
 
     fun write(ctx: Context, text: String) {
  ClipStore.markPicked(text)

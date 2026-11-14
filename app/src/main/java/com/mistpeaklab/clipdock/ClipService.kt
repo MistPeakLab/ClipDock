@@ -393,18 +393,36 @@ class ClipService : AccessibilityService() {
         lastProbeAt = SystemClock.uptimeMillis()
         fun useFallback(result: String) {
             if (fallback != null && record(fallback)) Diag.log(trigger, pkg, Diag.FALLBACK, Diag.resultName(result))
-            else Diag.log(trigger, pkg, result)
+            else Diag.log(trigger, pkg, result, if (result == Diag.EMPTY) ClipReader.emptyReason(this) else null)
         }
         val view = object : View(this) {
             var done = false
+            var focused = false
+
+            /** how：这次是靠什么读到的，写进诊断；last：读不到就放弃 */
+            fun attempt(how: String, last: Boolean) {
+                if (done) return
+                val r = ClipReader.captureResult(this@ClipService)
+                if (r != null && r != Diag.EMPTY) {
+                    done = true
+                    Diag.log(trigger, pkg, r, how)
+                    removeLater()
+                } else if (last) {
+                    done = true
+                    useFallback(if (focused) Diag.EMPTY else Diag.NO_FOCUS)
+                    removeLater()
+                }
+            }
+
+            /** 不能在焦点回调里当场移除窗口：系统还在用这个窗口处理焦点变化，当场移除会让整个进程崩溃 */
+            fun removeLater() {
+                val self: View = this
+                main.post { if (probe === self) removeProbe() }
+            }
+
             override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
                 super.onWindowFocusChanged(hasWindowFocus)
-                if (hasWindowFocus && !done) {
-                    done = true
-                    val r = ClipReader.captureResult(this@ClipService)
-                    if (r == null || r == Diag.EMPTY) useFallback(Diag.EMPTY) else Diag.log(trigger, pkg, r)
-                    removeProbe()
-                }
+                if (hasWindowFocus) { focused = true; attempt("焦点回调", true) }
             }
         }
         val lp = WindowManager.LayoutParams(
@@ -416,7 +434,8 @@ class ClipService : AccessibilityService() {
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            alpha = 0f
+            // 不能把窗口 alpha 设成 0：系统把完全透明的窗口当作“不可见”，不可见的窗口拿不到输入焦点。
+            // 这个 View 什么都不画，本身就是透明的。
             windowAnimations = 0
         }
         probe = view
@@ -425,12 +444,9 @@ class ClipService : AccessibilityService() {
             useFallback(Diag.ADD_FAIL)
             return
         }
-        main.postDelayed({
-            if (probe === view) {
-                if (!view.done) useFallback(Diag.NO_FOCUS)
-                removeProbe()
-            }
-        }, 600)
+        // 焦点回调在有的系统上不来或来得晚，而剪贴板的放行看的是窗口管理器认定的焦点：隔一会儿直接试读
+        for (t in longArrayOf(120, 300)) main.postDelayed({ if (probe === view) view.attempt("轮询 ${t}ms", false) }, t)
+        main.postDelayed({ if (probe === view) view.attempt("超时前", true) }, 600)
     }
 
     private fun removeProbe() {

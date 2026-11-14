@@ -35,6 +35,7 @@ object Diag {
     private val list = ArrayDeque<Entry>()
     private val sampleLines = ArrayDeque<String>()
     private var file: File? = null
+    private var crashFile: File? = null
     private val io = Executors.newSingleThreadExecutor()
 
     private val _version = MutableStateFlow(0)
@@ -50,6 +51,14 @@ object Diag {
         if (file != null) return
         val f = File(ctx.applicationContext.filesDir, "diag.json")
         file = f
+        // 记下崩溃原因：进程崩了用户看不到任何提示，只会觉得“又没记下来”
+        val crash = File(f.parentFile, "crash.txt")
+        crashFile = crash
+        val prev = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            runCatching { crash.writeText(stamp.format(Date()) + "\n" + android.util.Log.getStackTraceString(e).take(4000)) }
+            prev?.uncaughtException(t, e)
+        }
         if (!f.exists()) return
         runCatching {
             val arr = JSONArray(f.readText())
@@ -83,6 +92,7 @@ object Diag {
 
     fun clear() {
         synchronized(this) { list.clear(); sampleLines.clear(); save() }
+        runCatching { crashFile?.delete() }
         _version.value++
     }
 
@@ -153,6 +163,7 @@ object Diag {
     fun report(ctx: Context): String = buildString {
         append("【随贴 收录诊断】\n")
         status(ctx).forEach { append(it.name).append("：").append(it.value).append('\n') }
+        crashFile?.takeIf { it.exists() }?.let { append("\n上次崩溃：").append(runCatching { it.readText() }.getOrDefault("")).append('\n') }
         val es = entries()
         append("\n最近 ").append(es.size).append(" 条记录（新→旧）：\n")
         es.forEach { e ->
