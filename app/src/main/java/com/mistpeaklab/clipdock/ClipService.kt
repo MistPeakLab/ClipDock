@@ -1,10 +1,15 @@
 package com.mistpeaklab.clipdock
 
 import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import android.provider.Settings
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -15,9 +20,10 @@ import android.view.accessibility.AccessibilityNodeInfo
 /**
  * 增强模式（无障碍服务）。负责：
  * 1. 后台记录剪贴板：Android 10 起后台应用读不到剪贴板，只有“拥有焦点的窗口”能读。
- *    检测到“可能复制了”（Ctrl+C / Ctrl+X、点了“复制”、出现“已复制”提示、打开面板）时，
+ *    检测到“可能复制了”时（触发来源见 [requestCapture]），
  *    瞬间弹出一个 1 像素透明可获焦窗口，拿到焦点那一刻读剪贴板，随即移除。
- *    读不到时，退而读取当前输入框里选中的文字（密码框跳过）。
+ *    Ctrl+C 读不到时，退而读取当前输入框里选中的文字（密码框跳过）。
+ *    每次读取的来源和结果都记进 [Diag]，方便定位“为什么没记下来”。
  * 2. 全局快捷键：监听实体键盘，按下设定的组合键就切换面板。
  * 3. 面板打开时的键盘操作。
  * 4. 可选的自动粘贴。
@@ -32,7 +38,13 @@ class ClipService : AccessibilityService() {
  @Volatile var recordingHotkey = false
 
  private val COPY_WORDS = listOf("复制", "拷贝", "剪切", "copy", "cut")
- private val COPIED_WORDS = listOf("已复制", "复制成功", "已拷贝", "已剪切", "copied")
+ private val COPIED_WORDS = listOf("已复制", "复制成功", "已拷贝", "已剪切", "已複製", "copied")
+        private const val SYSTEMUI = "com.android.systemui"
+
+        /** 两次读取之间至少隔这么久；期间到达的触发合并成一次 */
+        private const val MIN_GAP = 400L
+        /** 切换应用、解锁这类兜底触发的最小间隔 */
+        private const val PASSIVE_GAP = 1500L
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -41,16 +53,39 @@ class ClipService : AccessibilityService() {
     private var probe: View? = null
     private var swallowKeyUp = -1
 
+    // 收录触发的状态（都只在主线程读写）
+    private var pendingRun: Runnable? = null
+    private var pendingTrigger = ""
+    private var pendingFallback: String? = null
+    private var pendingDue = 0L
+    private var lastProbeAt = 0L
+    private var lastPassiveAt = 0L
+    private var lastKeyAt = 0L
+    private var lastLongClickAt = 0L
+    private var currentPkg: String? = null
+    private var selActive = false
+    private var selPkg: String? = null
+    private var selLen = 0
+    private var selHash = 0
+
+    private val unlockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) { requestCapture("UNLOCK", 800) }
+    }
+
     override fun onServiceConnected() {
         instance = this
         prefs = Prefs(this)
         wm = getSystemService(WindowManager::class.java)
         ClipStore.init(this)
- main.postDelayed({ captureClipboard() }, 800)
+        runCatching { registerReceiver(unlockReceiver, IntentFilter(Intent.ACTION_USER_PRESENT), Context.RECEIVER_NOT_EXPORTED) }
+        requestCapture("SERVICE_START", 800)
     }
 
     override fun onDestroy() {
         PanelHost.hide()
+        runCatching { unregisterReceiver(unlockReceiver) }
+        pendingRun?.let(main::removeCallbacks)
+        pendingRun = null
         removeProbe()
         if (instance === this) instance = null
         super.onDestroy()
@@ -157,6 +192,7 @@ class ClipService : AccessibilityService() {
         // 面板需要知道 Ctrl / Shift 是否按住（Ctrl+点击、Shift+点击），只记录，不拦截
  if (PanelHost.isShowing && Hotkey.isModifierKey(code)) PanelHost.handleModifier(event)
  if (event.action != KeyEvent.ACTION_DOWN) return false
+        lastKeyAt = SystemClock.uptimeMillis()
 
         if (prefs.hotkeyEnabled && prefs.hotkey.matches(event)) {
             if (event.repeatCount == 0) {
@@ -176,7 +212,7 @@ class ClipService : AccessibilityService() {
      (code == KeyEvent.KEYCODE_C || code == KeyEvent.KEYCODE_X)
         ) {
      val selected = selectedTextOfFocused()
-     main.postDelayed({ captureClipboard(fallback = selected) }, 250)
+     requestCapture("KEY_COPY", 250, selected)
         }
         return false
     }
@@ -186,23 +222,108 @@ class ClipService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString()
         if (pkg == packageName) return
+        if (Diag.sampling) sampleEvent(event, pkg)
+        val now = SystemClock.uptimeMillis()
         when (event.eventType) {
-     AccessibilityEvent.TYPE_VIEW_CLICKED -> {
-  val label = (event.text.joinToString(" ") + " " + (event.contentDescription ?: "")).lowercase()
-  if (label.length <= 20 && COPY_WORDS.any { label.contains(it) }) {
-      main.postDelayed({ captureClipboard() }, 300)
-         }
+            AccessibilityEvent.TYPE_VIEW_CLICKED -> {
+                val label = clickLabel(event)
+                if (label.length <= 40 && COPY_WORDS.any { label.contains(it) }) {
+                    lastLongClickAt = 0
+                    requestCapture("CLICK_COPY", 300)
+                } else if (now - lastLongClickAt < 6000) {
+                    // 长按后弹出的菜单里，“复制”常常只是个图标、没有文字：长按之后的第一次点击也读一次
+                    lastLongClickAt = 0
+                    requestCapture("LONG_CLICK", 350)
+                }
             }
-     AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
-         val text = event.text.joinToString(" ").lowercase()
-         if (COPIED_WORDS.any { text.contains(it) }) main.postDelayed({ captureClipboard() }, 100)
-     }
-     AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-  if (PanelHost.isShowing && prefs.closeOnAppSwitch && pkg != null &&
-      pkg != "com.android.systemui" && event.className?.contains("Activity") == true
-  ) PanelHost.hide()
-     }
- }
+            AccessibilityEvent.TYPE_VIEW_LONG_CLICKED -> lastLongClickAt = now
+            AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED -> onSelectionChanged(event, pkg)
+            AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED, AccessibilityEvent.TYPE_ANNOUNCEMENT -> {
+                val text = event.text.joinToString(" ").lowercase()
+                if (COPIED_WORDS.any { text.contains(it) }) {
+                    requestCapture(if (pkg == SYSTEMUI) "SYSTEM_CLIP_UI" else "COPIED_TOAST", 100)
+                }
+            }
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                if (PanelHost.isShowing && prefs.closeOnAppSwitch && pkg != null &&
+                    pkg != SYSTEMUI && event.className?.contains("Activity") == true
+                ) PanelHost.hide()
+                if (pkg == SYSTEMUI) {
+                    // Android 13 起复制后系统会弹出剪贴板预览
+                    if (event.className?.contains("clipboard", ignoreCase = true) == true) requestCapture("SYSTEM_CLIP_UI", 100)
+                } else if (pkg != null && pkg != currentPkg && !isInputMethod(pkg)) {
+                    currentPkg = pkg
+                    requestCapture("APP_SWITCH", 600)
+                }
+            }
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
+                if (event.windowChanges and AccessibilityEvent.WINDOWS_CHANGE_ADDED != 0 && clipboardWindowShowing()) {
+                    requestCapture("SYSTEM_CLIP_UI", 100)
+                }
+            }
+        }
+    }
+
+    /** 被点控件的文字；控件自己没有文字时（外层容器），向下找两层子控件 */
+    private fun clickLabel(event: AccessibilityEvent): String {
+        val sb = StringBuilder()
+        event.text.forEach { sb.append(it).append(' ') }
+        event.contentDescription?.let { sb.append(it) }
+        if (sb.isBlank()) runCatching { event.source?.let { collectLabel(it, 0, sb, IntArray(1)) } }
+        return sb.toString().trim().lowercase()
+    }
+
+    private fun collectLabel(n: AccessibilityNodeInfo, depth: Int, sb: StringBuilder, visited: IntArray) {
+        if (sb.length > 60 || visited[0]++ > 12) return
+        n.text?.let { sb.append(it).append(' ') }
+        n.contentDescription?.let { sb.append(it).append(' ') }
+        if (depth >= 2) return
+        for (i in 0 until minOf(n.childCount, 6)) n.getChild(i)?.let { collectLabel(it, depth + 1, sb, visited) }
+    }
+
+    /**
+     * 选中的文字不见了、而文字本身没变：多半是点了选择工具栏上的“复制”。
+     * 文字变了说明是打字替换或删除，不算。这里只是去读剪贴板，不会把选中的文字直接记下来。
+     */
+    private fun onSelectionChanged(event: AccessibilityEvent, pkg: String?) {
+        val full = event.text.firstOrNull()
+        val from = event.fromIndex
+        val to = event.toIndex
+        if (from >= 0 && to >= 0 && from != to) {
+            if (!event.isPassword && full != null) {
+                selActive = true
+                selPkg = pkg
+                selLen = full.length
+                selHash = full.toString().hashCode()
+            } else selActive = false
+        } else if (selActive) {
+            selActive = false
+            if (pkg == selPkg && full != null && full.length == selLen && full.toString().hashCode() == selHash) {
+                requestCapture("SELECTION_END", 300)
+            }
+        }
+    }
+
+    private fun clipboardWindowShowing(): Boolean = runCatching {
+        windows.any { it.title?.contains("clipboard", ignoreCase = true) == true }
+    }.getOrDefault(false)
+
+    private fun isInputMethod(pkg: String): Boolean {
+        val ime = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD) ?: return false
+        return ime.substringBefore('/') == pkg
+    }
+
+    /** 事件采样（诊断页手动开启，限时）：记下事件概要，用来给没适配过的机型找“刚复制了”的特征 */
+    private fun sampleEvent(event: AccessibilityEvent, pkg: String?) {
+        val sb = StringBuilder(AccessibilityEvent.eventTypeToString(event.eventType).removePrefix("TYPE_"))
+        sb.append(' ').append(pkg).append(' ').append(event.className?.toString()?.substringAfterLast('.'))
+        val text = event.text.joinToString(" ")
+        if (text.isNotEmpty()) sb.append(" [").append(if (text.length <= 8) text else "${text.length}字").append(']')
+        runCatching { event.source?.viewIdResourceName }.getOrNull()?.let { sb.append(" id=").append(it.substringAfter('/')) }
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
+            runCatching { windows.mapNotNull { it.title?.toString() } }.getOrNull()?.let { sb.append(" 窗口=").append(it) }
+        }
+        Diag.sample(sb.toString())
     }
 
     private fun selectedTextOfFocused(): String? = runCatching {
@@ -215,43 +336,100 @@ class ClipService : AccessibilityService() {
 
     // ---------------- 读剪贴板（焦点探针） ----------------
 
-    fun captureClipboard(fallback: String? = null) {
-        if (ClipReader.capture(this)) return
+    private fun isPassive(trigger: String) =
+        trigger == "APP_SWITCH" || trigger == "UNLOCK" || trigger == "LONG_CLICK" || trigger == "SELECTION_END"
+
+    /**
+     * 请求读一次剪贴板。trigger 是来源：
+     * KEY_COPY 键盘复制 / CLICK_COPY 点了“复制” / COPIED_TOAST “已复制”提示 / SYSTEM_CLIP_UI 系统剪贴板预览，
+     * 以及“补漏检测”的 LONG_CLICK / SELECTION_END / APP_SWITCH / UNLOCK（没有明确的复制信号，可在设置里关）。
+     * 短时间内的多次请求合并成一次；有明确信号的请求会顶替补漏请求，并把时间推到自己需要的时刻。
+     */
+    fun requestCapture(trigger: String, delay: Long, fallback: String? = null) {
+        val now = SystemClock.uptimeMillis()
+        val passive = isPassive(trigger)
+        if (passive) {
+            if (!prefs.passiveCapture || PanelHost.isShowing) return
+            if (trigger == "APP_SWITCH" || trigger == "UNLOCK") {
+                if (now - lastPassiveAt < PASSIVE_GAP) return
+                lastPassiveAt = now
+            }
+        }
+        val due = now + delay
+        val p = pendingRun
+        if (p != null) {
+            if (fallback != null) pendingFallback = fallback
+            if (!passive) {
+                if (isPassive(pendingTrigger)) pendingTrigger = trigger
+                if (due > pendingDue) {
+                    main.removeCallbacks(p)
+                    pendingDue = due
+                    main.postAtTime(p, due)
+                }
+            }
+            return
+        }
+        pendingTrigger = trigger
+        pendingFallback = fallback
+        pendingDue = maxOf(due, lastProbeAt + MIN_GAP)
+        val r = Runnable {
+            pendingRun = null
+            val t = pendingTrigger
+            val f = pendingFallback
+            pendingFallback = null
+            // 读的那一瞬间当前窗口会失去焦点：正在用实体键盘打字时不做补漏，免得吞掉按键
+            if (isPassive(t) && SystemClock.uptimeMillis() - lastKeyAt < 1000) return@Runnable
+            captureClipboard(t, f)
+        }
+        pendingRun = r
+        main.postAtTime(r, pendingDue)
+    }
+
+    fun captureClipboard(trigger: String, fallback: String? = null) {
+        val pkg = currentPkg
+        // 自己的窗口正好有焦点（主界面、可获焦的面板）时能直接读
+        ClipReader.captureResult(this)?.let { Diag.log(trigger, pkg, it); return }
         if (probe != null) return
+        lastProbeAt = SystemClock.uptimeMillis()
+        fun useFallback(result: String) {
+            if (fallback != null && record(fallback)) Diag.log(trigger, pkg, Diag.FALLBACK, Diag.resultName(result))
+            else Diag.log(trigger, pkg, result)
+        }
         val view = object : View(this) {
-     var done = false
-     override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
-         super.onWindowFocusChanged(hasWindowFocus)
-  if (hasWindowFocus && !done) {
-      done = true
-      if (!ClipReader.capture(this@ClipService) && fallback != null) record(fallback)
-      removeProbe()
-  }
-     }
+            var done = false
+            override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+                super.onWindowFocusChanged(hasWindowFocus)
+                if (hasWindowFocus && !done) {
+                    done = true
+                    val r = ClipReader.captureResult(this@ClipService)
+                    if (r == null || r == Diag.EMPTY) useFallback(Diag.EMPTY) else Diag.log(trigger, pkg, r)
+                    removeProbe()
+                }
+            }
         }
         val lp = WindowManager.LayoutParams(
-     1, 1,
-     WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            1, 1,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-  WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM or
-  WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-     PixelFormat.TRANSLUCENT,
- ).apply {
-     gravity = Gravity.TOP or Gravity.START
-     alpha = 0f
-     windowAnimations = 0
+                WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            alpha = 0f
+            windowAnimations = 0
         }
- probe = view
- runCatching { wm.addView(view, lp) }.onFailure {
-     probe = null
-     fallback?.let(::record)
-     return
+        probe = view
+        runCatching { wm.addView(view, lp) }.onFailure {
+            probe = null
+            useFallback(Diag.ADD_FAIL)
+            return
         }
         main.postDelayed({
-     if (probe === view) {
-  if (!view.done) fallback?.let(::record)
-  removeProbe()
-     }
+            if (probe === view) {
+                if (!view.done) useFallback(Diag.NO_FOCUS)
+                removeProbe()
+            }
         }, 600)
     }
 
@@ -261,9 +439,7 @@ class ClipService : AccessibilityService() {
         runCatching { wm.removeViewImmediate(v) }
     }
 
-    private fun record(text: String) {
- ClipStore.add(text, prefs.maxItems)
-    }
+    private fun record(text: String): Boolean = ClipStore.add(text, prefs.maxItems)
 }
 
 fun Context.isClipServiceOn(): Boolean = ClipService.instance != null

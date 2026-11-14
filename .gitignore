@@ -21,3 +21,7 @@ keys/
 keystore.properties
 *.jks
 *.keystore
+
+# 开发规划文档与对话记录（不公开）
+docs/dev/
+上次的对话记录.md

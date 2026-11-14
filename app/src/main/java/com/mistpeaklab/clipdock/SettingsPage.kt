@@ -24,16 +24,18 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 
 @Composable
-fun SettingsPage() {
+fun SettingsPage(onOpenDiag: () -> Unit) {
     val ctx = LocalContext.current
     val prefs = remember { Prefs(ctx) }
     var v by remember { mutableIntStateOf(0) } // 改设置后触发重组
     fun upd() { v++ }
     var recording by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
+    // 滚动位置放在 key(v) 外面：改一项设置会重建整页内容，但不能跳回顶部
+    val scroll = androidx.compose.foundation.rememberScrollState()
 
     key(v) {
- PageColumn {
+ PageColumn(scroll) {
      Group("唤起") {
   Toggle("启用快捷键唤起", "需要增强模式（无障碍服务）", prefs.hotkeyEnabled) { prefs.hotkeyEnabled = it; upd() }
   Clickable("唤起快捷键", "Win + V 若被系统占用，可换成 Ctrl + Shift + V 或 Alt + V", prefs.hotkey.label()) {
@@ -69,6 +71,8 @@ fun SettingsPage() {
   Choice("最多保留条数（不含置顶）", opts.map { "$it" }, opts.indexOf(prefs.maxItems).coerceAtLeast(0)) {
       prefs.maxItems = opts[it]; ClipStore.applyLimit(opts[it]); upd()
   }
+  Toggle("补漏检测", "切换应用、解锁屏幕、长按菜单里点了某一项之后，也去看一眼剪贴板，补上没察觉到的复制。需要增强模式。读取的一瞬间当前窗口会短暂失去焦点，若某个游戏因此暂停，可以关掉", prefs.passiveCapture) { prefs.passiveCapture = it; upd() }
+  Clickable("收录诊断", "复制了却没记下来？在这里看每次读取的来源和结果", "查看") { onOpenDiag() }
   Clickable("清空全部记录", "包括置顶内容，不可恢复；常用语保留", "清空") { confirmClear = true }
      }
      Group("面板快捷键") {

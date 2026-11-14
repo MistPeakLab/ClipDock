@@ -3,6 +3,7 @@
     <string name="app_name">随贴</string>
     <string name="tile_label">剪贴板</string>
     <string name="shortcut_panel">悬浮面板</string>
+    <string name="save_to_clipdock">存到随贴</string>
     <string name="shortcut_main">主界面</string>
     <string name="a11y_desc">开启后随贴进入增强模式：①在后台自动记录你复制的文字；②用实体键盘快捷键（如 Win+V）唤起悬浮面板，面板不抢输入框焦点；③可选把选中的内容直接粘贴到输入框。所有数据只保存在本机，应用没有联网权限。</string>
 </resources>

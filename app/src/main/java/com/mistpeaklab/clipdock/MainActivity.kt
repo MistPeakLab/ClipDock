@@ -55,7 +55,7 @@ class MainActivity : ComponentActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
  super.onWindowFocusChanged(hasFocus)
  // 主界面在前台、有焦点：可以直接读系统剪贴板，无需任何权限
- if (hasFocus) ClipReader.capture(this)
+ if (hasFocus) ClipReader.capture(this, "FOREGROUND")
     }
 }
 
@@ -89,6 +89,7 @@ enum class Page(val title: String, val icon: Int) {
     Links("链接", R.drawable.ic_link),
     Abilities("权限与模式", R.drawable.ic_shield),
     Settings("设置", R.drawable.ic_settings),
+    Diag("收录诊断", R.drawable.ic_shield),
 }
 
 @Composable
@@ -99,6 +100,9 @@ fun AppRoot() {
     val items by ClipStore.items.collectAsStateWithLifecycle()
     var tick by remember { mutableIntStateOf(0) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { tick++ }
+    // 应用刚启动时无障碍服务可能还没连上，稍后再查一次，免得误报“已被系统停止”
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(2500); tick++ }
+    val serviceStopped = remember(tick) { tick > 0 && ClipService.instance == null && ctx.isClipServiceEnabledInSystem() }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val wide = maxWidth >= 720.dp
@@ -107,9 +111,11 @@ fun AppRoot() {
      if (wide) Sidebar(page, items, tick, Modifier.width(240.dp)) { page = it }
      Column(Modifier.weight(1f).fillMaxHeight()) {
   TopBar(page, query, { query = it }, showMenu = !wide) { drawerOpen = true }
+  if (serviceStopped && page != Page.Diag) StoppedBanner { page = Page.Diag }
   when (page) {
       Page.Abilities -> AbilitiesPage(tick)
-      Page.Settings -> SettingsPage()
+      Page.Settings -> SettingsPage { page = Page.Diag }
+      Page.Diag -> DiagPage(tick) { page = Page.Settings }
       Page.Phrases -> PhrasesPage(items.filter { it.phrase }, query)
       else -> ClipGrid(filter(items, page, query), page, query)
   }
@@ -121,6 +127,26 @@ fun AppRoot() {
          page = it; drawerOpen = false
      }
  }
+    }
+}
+
+/** 系统设置里开着无障碍，但服务没在运行：快捷键和后台记录都已失效，用户往往不知道 */
+@Composable
+private fun StoppedBanner(onDetail: () -> Unit) {
+    val ctx = LocalContext.current
+    val c = Color(0xFFE8833A)
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).clip(RoundedCornerShape(12.dp))
+            .background(c.copy(alpha = 0.14f)).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("增强模式已被系统停止", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c)
+            Text("快捷键和后台记录暂时不可用。到无障碍设置里把随贴关掉再重新打开即可恢复。", fontSize = 12.sp, lineHeight = 17.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        TextButton(onClick = onDetail) { Text("诊断") }
+        TextButton(onClick = { ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }) { Text("去处理") }
     }
 }
 
@@ -256,7 +282,7 @@ fun TopBar(page: Page, query: String, onQuery: (String) -> Unit, showMenu: Boole
      Spacer(Modifier.width(12.dp))
      Spacer(Modifier.weight(0.01f))
      FilledTonalButton(onClick = {
-  val ok = ClipReader.capture(ctx)
+  val ok = ClipReader.capture(ctx, "MANUAL")
   Toast.makeText(ctx, if (ok) "已读取当前剪贴板" else "剪贴板为空", Toast.LENGTH_SHORT).show()
      }) {
   Icon(painterResource(R.drawable.ic_download), null, Modifier.size(18.dp))
@@ -401,7 +427,7 @@ fun AbilitiesPage(tick: Int) {
  ) { ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}"))) }
  Step(
      "后台记录 + 快捷键（增强模式）", if (a11y) "已开启" else "未开启",
-     "开启随贴的无障碍服务后：后台自动记录每次复制；实体键盘按 Win+V（可改）唤起；面板不抢输入框焦点、不弹输入法；可选自动粘贴。\n" +
+     "开启随贴的无障碍服务后：后台自动记录复制的文字；实体键盘按 Win+V（可改）唤起；面板不抢输入框焦点、不弹输入法；可选自动粘贴。\n" +
   "如果开关是灰的、提示“受限设置”：系统设置 › 应用 › 随贴 › 右上角 ⋮ › 允许受限设置。",
      a11y, "去开启",
  ) { ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
@@ -414,6 +440,11 @@ fun AbilitiesPage(tick: Int) {
   ctx.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}")))
      }.onFailure { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}"))) }
  }
+        Explain(
+            "不开无障碍，也能把文字存进来",
+            "在任何应用里选中文字，在弹出的菜单里点“存到随贴”（有的应用把它收在 ⋮ 里）；或者用“分享”把文字发给随贴。\n" +
+                "这两种方式不需要任何权限，也不会漏。开了无障碍但某个应用里总记不下来时，同样可以用它。",
+        )
         Text("数据只保存在本机，应用没有申请联网权限。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
      modifier = Modifier.padding(top = 8.dp))
     }
@@ -455,9 +486,12 @@ private fun Step(title: String, state: String, desc: String, ok: Boolean, action
 }
 
 @Composable
-fun PageColumn(content: @Composable ColumnScope.() -> Unit) {
+fun PageColumn(
+    scroll: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState(),
+    content: @Composable ColumnScope.() -> Unit,
+) {
     Column(
- Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState())
+ Modifier.fillMaxSize().verticalScroll(scroll)
      .padding(horizontal = 20.dp, vertical = 8.dp).widthIn(max = 760.dp),
  verticalArrangement = Arrangement.spacedBy(12.dp),
  content = content,

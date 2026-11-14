@@ -76,6 +76,12 @@ class Prefs(context: Context) {
     /** 点桌面图标时直接唤起悬浮面板（否则打开主界面） */
     var iconOpensPanel by bool("icon_opens_panel", false)
 
+    /**
+     * 补漏检测：切换应用、解锁、长按菜单点击、选区消失时也去读一次剪贴板。
+     * 读的那一瞬间当前窗口会短暂失去焦点，个别游戏可能因此暂停，所以可以关。
+     */
+    var passiveCapture by bool("passive_capture", true)
+
     // 记录
     var maxItems: Int
         get() = sp.getInt("max_items", 200)

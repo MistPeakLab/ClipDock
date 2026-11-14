@@ -9,7 +9,7 @@ class LauncherActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
  if (Prefs(this).iconOpensPanel && PanelHost.canShow(this)) {
-     ClipReader.capture(this) // 此刻本应用在前台，可以直接读到当前剪贴板
+     ClipReader.capture(this, "FOREGROUND") // 此刻本应用在前台，可以直接读到当前剪贴板
      PanelHost.toggle(this)
  } else {
      startActivity(Intent(this, MainActivity::class.java))
@@ -23,7 +23,7 @@ class PanelActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
  if (PanelHost.canShow(this)) {
-     ClipReader.capture(this)
+     ClipReader.capture(this, "FOREGROUND")
      PanelHost.toggle(this)
  } else {
      startActivity(Intent(this, MainActivity::class.java))

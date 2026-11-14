@@ -40,6 +40,27 @@
      android:taskAffinity=""
             android:theme="@android:style/Theme.NoDisplay" />
 
+        <!-- 不需要无障碍的收录入口：选中文字 › 存到随贴；分享 › 存到随贴 -->
+        <activity
+            android:name=".SaveTextActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/save_to_clipdock"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <activity
      android:name=".MainActivity"
      android:exported="true"

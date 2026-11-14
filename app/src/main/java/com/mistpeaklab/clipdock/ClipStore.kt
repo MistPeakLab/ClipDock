@@ -44,7 +44,8 @@ object ClipStore {
     fun init(context: Context) {
  if (file != null) return
         val f = File(context.applicationContext.filesDir, FILE)
- file = f
+        file = f
+        Diag.init(context)
         if (!f.exists()) return
         runCatching {
      val arr = JSONArray(f.readText())
@@ -63,13 +64,18 @@ object ClipStore {
     /** 常用语：按用户排序 */
     fun phrases(): List<ClipItem> = _items.value.filter { it.phrase }
 
-    /** 记录新复制的内容。已存在则移到最前；本应用刚写回剪贴板的内容不重复记录。 */
-    fun add(text: String, maxItems: Int): Boolean {
+    /**
+     * 记录新复制的内容。已存在则移到最前；本应用刚写回剪贴板的内容不重复记录。
+     * @param fromClipboard 内容是否来自系统剪贴板；“存到随贴”、分享进来的文字不是，不能把它当成“当前剪贴板”
+     */
+    fun add(text: String, maxItems: Int, fromClipboard: Boolean = true): Boolean {
         if (text.isBlank()) return false
         synchronized(this) {
-     _current.value = text
-     if (text == lastPicked) return false
-     lastPicked = null
+            if (fromClipboard) {
+                _current.value = text
+                if (text == lastPicked) return false
+                lastPicked = null
+            }
      val list = _items.value
      val existing = list.firstOrNull { !it.phrase && it.text == text }
      if (existing != null) {

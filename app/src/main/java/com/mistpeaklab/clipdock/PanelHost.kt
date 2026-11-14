@@ -14,11 +14,21 @@ object ClipReader {
  if (clip.itemCount == 0) null else clip.getItemAt(0).coerceToText(ctx)?.toString()
     }.getOrNull()
 
-    /** 读当前剪贴板并记录。只有在本应用拥有焦点（前台）时才读得到。 */
-    fun capture(ctx: Context): Boolean {
-        val t = read(ctx) ?: return false
-        ClipStore.add(t, Prefs(ctx).maxItems)
-        return true
+    /**
+     * 读当前剪贴板并记录。只有在本应用拥有焦点（前台）时才读得到。
+     * @return [Diag.NEW] / [Diag.DUP] / [Diag.EMPTY]；读不到返回 null
+     */
+    fun captureResult(ctx: Context): String? {
+        val t = read(ctx) ?: return null
+        if (t.isBlank()) return Diag.EMPTY
+        return if (ClipStore.add(t, Prefs(ctx).maxItems)) Diag.NEW else Diag.DUP
+    }
+
+    /** 本应用自己的窗口在前台时读取并记录，结果写进诊断 */
+    fun capture(ctx: Context, trigger: String): Boolean {
+        val r = captureResult(ctx)
+        Diag.log(trigger, null, r ?: Diag.EMPTY)
+        return r != null && r != Diag.EMPTY
     }
 
     fun write(ctx: Context, text: String) {
@@ -53,12 +63,12 @@ object PanelHost {
      Settings.canDrawOverlays(ctx) -> { host = ctx.applicationContext; type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY; focusable = true }
      else -> return false
         }
- svc?.captureClipboard()
+ svc?.captureClipboard("PANEL_OPEN")
         val prefs = Prefs(host)
         panel = PanelController(
             host, host.getSystemService(WindowManager::class.java), prefs, type, focusable,
      onAct = { text, mode, cards -> act(host, prefs, text, mode, cards) },
-     onFocused = { ClipReader.capture(host) },
+     onFocused = { ClipReader.capture(host, "PANEL_OPEN") },
      onDismiss = { panel = null },
         ).also { it.show() }
         return true
