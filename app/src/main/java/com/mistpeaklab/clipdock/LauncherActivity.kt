@@ -8,7 +8,7 @@ import android.os.Bundle
 class LauncherActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
- if (Prefs(this).iconOpensPanel && PanelHost.canShow(this)) {
+ if (Prefs(this).iconOpensPanel && Prefs(this).onboardingDone && PanelHost.canShow(this)) {
      ClipReader.capture(this, "FOREGROUND") // 此刻本应用在前台，可以直接读到当前剪贴板
      PanelHost.toggle(this)
  } else {
@@ -22,7 +22,7 @@ class LauncherActivity : Activity() {
 class PanelActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
- if (PanelHost.canShow(this)) {
+        if (Prefs(this).onboardingDone && PanelHost.canShow(this)) {
      ClipReader.capture(this, "FOREGROUND")
      PanelHost.toggle(this)
  } else {

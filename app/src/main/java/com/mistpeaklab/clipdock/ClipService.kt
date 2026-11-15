@@ -57,6 +57,7 @@ class ClipService : AccessibilityService() {
     private var pendingRun: Runnable? = null
     private var pendingTrigger = ""
     private var pendingFallback: String? = null
+    private var pendingSource: String? = null
     private var pendingDue = 0L
     private var lastProbeAt = 0L
     private var lastPassiveAt = 0L
@@ -69,7 +70,13 @@ class ClipService : AccessibilityService() {
     private var selHash = 0
 
     private val unlockReceiver = object : BroadcastReceiver() {
-        override fun onReceive(c: Context, i: Intent) { requestCapture("UNLOCK", 800) }
+        override fun onReceive(c: Context, i: Intent) {
+            when (i.action) {
+                Intent.ACTION_USER_PRESENT -> requestCapture("UNLOCK", 800)
+                // 锁屏时立刻收起隐藏内容的“已验证”状态
+                Intent.ACTION_SCREEN_OFF -> com.mistpeaklab.clipdock.data.Vault.lock()
+            }
+        }
     }
 
     override fun onServiceConnected() {
@@ -77,7 +84,12 @@ class ClipService : AccessibilityService() {
         prefs = Prefs(this)
         wm = getSystemService(WindowManager::class.java)
         ClipStore.init(this)
-        runCatching { registerReceiver(unlockReceiver, IntentFilter(Intent.ACTION_USER_PRESENT), Context.RECEIVER_NOT_EXPORTED) }
+        val f = IntentFilter(Intent.ACTION_USER_PRESENT).apply { addAction(Intent.ACTION_SCREEN_OFF) }
+        // 这两个都是系统广播；Android 13 起动态注册要写明是否接受别的应用发来的广播
+        runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= 33) registerReceiver(unlockReceiver, f, Context.RECEIVER_NOT_EXPORTED)
+            else registerReceiver(unlockReceiver, f)
+        }
         requestCapture("SERVICE_START", 800)
     }
 
@@ -142,7 +154,8 @@ class ClipService : AccessibilityService() {
   putInt(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_ARG_LENGTH, 1)
      }
      if (node.refreshWithExtraData(key, args)) {
-  val r = node.extras.getParcelableArray(key, android.graphics.RectF::class.java)?.getOrNull(0)
+  val r = (if (android.os.Build.VERSION.SDK_INT >= 33) node.extras.getParcelableArray(key, android.graphics.RectF::class.java)
+      else @Suppress("DEPRECATION") node.extras.getParcelableArray(key))?.getOrNull(0) as? android.graphics.RectF
   if (r != null && r.height() > 0 && box.contains(r.centerX().toInt(), r.centerY().toInt())) {
       val x = if (sel > 0) r.right else r.left
       return android.graphics.RectF(x, r.top, x + 2, r.bottom)
@@ -158,7 +171,7 @@ class ClipService : AccessibilityService() {
         val node = findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
      ?: rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
  if (node == null || !node.isEditable) {
-     android.widget.Toast.makeText(this, "已复制，没找到输入框，请按 Ctrl+V 粘贴", android.widget.Toast.LENGTH_SHORT).show()
+     android.widget.Toast.makeText(this, tr("已复制，没找到输入框，请按 Ctrl+V 粘贴", "Copied, but no text field found. Press Ctrl+V to paste."), android.widget.Toast.LENGTH_SHORT).show()
             return
  }
         if (node.performAction(AccessibilityNodeInfo.ACTION_PASTE)) return
@@ -193,6 +206,18 @@ class ClipService : AccessibilityService() {
  if (PanelHost.isShowing && Hotkey.isModifierKey(code)) PanelHost.handleModifier(event)
  if (event.action != KeyEvent.ACTION_DOWN) return false
         lastKeyAt = SystemClock.uptimeMillis()
+
+        // 依次粘贴进行中：快捷键贴出下一条，不打开面板
+
+        if (PasteQueue.active && prefs.hotkeyEnabled && prefs.hotkey.matches(event)) {
+
+            if (event.repeatCount == 0) PasteQueue.next(this)
+
+            swallowKeyUp = code
+
+            return true
+
+        }
 
         if (prefs.hotkeyEnabled && prefs.hotkey.matches(event)) {
             if (event.repeatCount == 0) {
@@ -252,8 +277,9 @@ class ClipService : AccessibilityService() {
                     // Android 13 起复制后系统会弹出剪贴板预览
                     if (event.className?.contains("clipboard", ignoreCase = true) == true) requestCapture("SYSTEM_CLIP_UI", 100)
                 } else if (pkg != null && pkg != currentPkg && !isInputMethod(pkg)) {
+                    val left = currentPkg
                     currentPkg = pkg
-                    requestCapture("APP_SWITCH", 600)
+                    requestCapture("APP_SWITCH", 600, left = left)
                 }
             }
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
@@ -339,13 +365,26 @@ class ClipService : AccessibilityService() {
     private fun isPassive(trigger: String) =
         trigger == "APP_SWITCH" || trigger == "UNLOCK" || trigger == "LONG_CLICK" || trigger == "SELECTION_END"
 
+    /** 有明确的“刚复制了”信号的触发 */
+    private fun isExplicit(trigger: String) =
+        trigger == "KEY_COPY" || trigger == "CLICK_COPY" || trigger == "COPIED_TOAST" || trigger == "SYSTEM_CLIP_UI"
+
+    /** 这次读到的内容最可能是在哪个应用里复制的。说不准就返回 null：宁可不记，也不要记错 */
+    private fun sourceFor(trigger: String, left: String?): String? = when {
+        // 切换应用后补读到的，是在刚离开的那个应用里复制的
+        trigger == "APP_SWITCH" -> left
+        isExplicit(trigger) || trigger == "LONG_CLICK" || trigger == "SELECTION_END" -> currentPkg
+        else -> null
+    }
+
     /**
      * 请求读一次剪贴板。trigger 是来源：
      * KEY_COPY 键盘复制 / CLICK_COPY 点了“复制” / COPIED_TOAST “已复制”提示 / SYSTEM_CLIP_UI 系统剪贴板预览，
      * 以及“补漏检测”的 LONG_CLICK / SELECTION_END / APP_SWITCH / UNLOCK（没有明确的复制信号，可在设置里关）。
-     * 短时间内的多次请求合并成一次；有明确信号的请求会顶替补漏请求，并把时间推到自己需要的时刻。
+     * 短时间内的多次请求合并成一次；有明确信号的请求会顶替没有明确信号的，并把时间推到自己需要的时刻。
+     * @param left 只有 APP_SWITCH 用：刚离开的那个应用
      */
-    fun requestCapture(trigger: String, delay: Long, fallback: String? = null) {
+    fun requestCapture(trigger: String, delay: Long, fallback: String? = null, left: String? = null) {
         val now = SystemClock.uptimeMillis()
         val passive = isPassive(trigger)
         if (passive) {
@@ -356,11 +395,16 @@ class ClipService : AccessibilityService() {
             }
         }
         val due = now + delay
+        val source = sourceFor(trigger, left)
         val p = pendingRun
         if (p != null) {
             if (fallback != null) pendingFallback = fallback
             if (!passive) {
-                if (isPassive(pendingTrigger)) pendingTrigger = trigger
+                // 诊断里显示的原因、记下的来源应用，都以信号更明确的那次为准
+                if (isPassive(pendingTrigger) || (isExplicit(trigger) && !isExplicit(pendingTrigger))) {
+                    pendingTrigger = trigger
+                    pendingSource = source
+                }
                 if (due > pendingDue) {
                     main.removeCallbacks(p)
                     pendingDue = due
@@ -371,28 +415,32 @@ class ClipService : AccessibilityService() {
         }
         pendingTrigger = trigger
         pendingFallback = fallback
+        pendingSource = source
         pendingDue = maxOf(due, lastProbeAt + MIN_GAP)
         val r = Runnable {
             pendingRun = null
             val t = pendingTrigger
             val f = pendingFallback
+            val s = pendingSource
             pendingFallback = null
+            pendingSource = null
             // 读的那一瞬间当前窗口会失去焦点：正在用实体键盘打字时不做补漏，免得吞掉按键
             if (isPassive(t) && SystemClock.uptimeMillis() - lastKeyAt < 1000) return@Runnable
-            captureClipboard(t, f)
+            captureClipboard(t, f, s)
         }
         pendingRun = r
         main.postAtTime(r, pendingDue)
     }
 
-    fun captureClipboard(trigger: String, fallback: String? = null) {
+    /** @param source 内容是在哪个应用里复制的（说不准为 null），只用来记“来源应用” */
+    fun captureClipboard(trigger: String, fallback: String? = null, source: String? = null) {
         val pkg = currentPkg
         // 自己的窗口正好有焦点（主界面、可获焦的面板）时能直接读
-        ClipReader.captureResult(this)?.let { Diag.log(trigger, pkg, it); return }
+        ClipReader.captureResult(this, source)?.let { Diag.log(trigger, pkg, it); return }
         if (probe != null) return
         lastProbeAt = SystemClock.uptimeMillis()
         fun useFallback(result: String) {
-            if (fallback != null && record(fallback)) Diag.log(trigger, pkg, Diag.FALLBACK, Diag.resultName(result))
+            if (fallback != null && record(fallback, source)) Diag.log(trigger, pkg, Diag.FALLBACK, Diag.resultName(result))
             else Diag.log(trigger, pkg, result, if (result == Diag.EMPTY) ClipReader.emptyReason(this) else null)
         }
         val view = object : View(this) {
@@ -402,7 +450,7 @@ class ClipService : AccessibilityService() {
             /** how：这次是靠什么读到的，写进诊断；last：读不到就放弃 */
             fun attempt(how: String, last: Boolean) {
                 if (done) return
-                val r = ClipReader.captureResult(this@ClipService)
+                val r = ClipReader.captureResult(this@ClipService, source)
                 if (r != null && r != Diag.EMPTY) {
                     done = true
                     Diag.log(trigger, pkg, r, how)
@@ -422,7 +470,7 @@ class ClipService : AccessibilityService() {
 
             override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
                 super.onWindowFocusChanged(hasWindowFocus)
-                if (hasWindowFocus) { focused = true; attempt("焦点回调", true) }
+                if (hasWindowFocus) { focused = true; attempt(tr("焦点回调", "focus callback"), true) }
             }
         }
         val lp = WindowManager.LayoutParams(
@@ -445,8 +493,8 @@ class ClipService : AccessibilityService() {
             return
         }
         // 焦点回调在有的系统上不来或来得晚，而剪贴板的放行看的是窗口管理器认定的焦点：隔一会儿直接试读
-        for (t in longArrayOf(120, 300)) main.postDelayed({ if (probe === view) view.attempt("轮询 ${t}ms", false) }, t)
-        main.postDelayed({ if (probe === view) view.attempt("超时前", true) }, 600)
+        for (t in longArrayOf(120, 300)) main.postDelayed({ if (probe === view) view.attempt(tr("轮询 %dms", "poll %dms", t), false) }, t)
+        main.postDelayed({ if (probe === view) view.attempt(tr("超时前", "before timeout"), true) }, 600)
     }
 
     private fun removeProbe() {
@@ -455,7 +503,7 @@ class ClipService : AccessibilityService() {
         runCatching { wm.removeViewImmediate(v) }
     }
 
-    private fun record(text: String): Boolean = ClipStore.add(text, prefs.maxItems)
+    private fun record(text: String, source: String?): Boolean = ClipStore.add(text, prefs.maxItems, sourcePkg = source)
 }
 
 fun Context.isClipServiceOn(): Boolean = ClipService.instance != null

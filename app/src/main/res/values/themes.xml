@@ -2,7 +2,18 @@
 <resources>
     <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.DayNight">
         <item name="android:windowActionBar">false</item>
- <item name="android:windowNoTitle">true</item>
+        <item name="android:windowNoTitle">true</item>
         <item name="android:windowBackground">@color/window_bg</item>
+    </style>
+
+    <!-- 验证身份用：透明，只有系统的验证框或应用密码框 -->
+    <style name="UnlockTheme" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
     </style>
 </resources>

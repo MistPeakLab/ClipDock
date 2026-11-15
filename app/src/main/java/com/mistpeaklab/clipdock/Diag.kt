@@ -27,6 +27,9 @@ object Diag {
     const val NO_FOCUS = "NO_FOCUS"  // 探针窗口没拿到焦点，读不到
     const val ADD_FAIL = "ADD_FAIL"  // 探针窗口加不上
     const val FALLBACK = "FALLBACK"  // 没读到剪贴板，改用了选中的文字
+    const val SKIPPED = "SKIPPED"    // 读到了，但按设置不记录（密码管理器、标记为敏感的内容）
+    const val OK = "OK"              // 存储方面的操作完成了（详情里是说明）
+    const val ERROR = "ERROR"        // 存储方面出了错（详情里是原因）
 
     data class Entry(val time: Long, val trigger: String, val pkg: String?, val result: String, val detail: String?, val count: Int = 1)
 
@@ -133,19 +136,25 @@ object Diag {
         val battery = ctx.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(ctx.packageName)
         val prefs = Prefs(ctx)
         return listOf(
-            Status("无障碍开关（系统设置里）", if (enabled) "已开启" else "未开启", enabled),
+            Status(tr("无障碍开关（系统设置里）", "Accessibility switch (system settings)"), if (enabled) tr("已开启", "On") else tr("未开启", "Off"), enabled),
             Status(
-                "无障碍服务实际运行", when {
-                    running -> "运行中"
-                    enabled -> "已被系统停止：请在无障碍设置里把随贴关掉再重新打开"
-                    else -> "未运行"
+                tr("无障碍服务实际运行", "Accessibility service actually running"), when {
+                    running -> tr("运行中", "Running")
+                    enabled -> tr("已被系统停止：请在无障碍设置里把随贴关掉再重新打开", "Stopped by the system: turn ClipDock off and on again in Accessibility settings")
+                    else -> tr("未运行", "Not running")
                 }, running,
             ),
-            Status("显示在其他应用上层", if (Settings.canDrawOverlays(ctx)) "已允许" else "未允许", Settings.canDrawOverlays(ctx)),
-            Status("忽略电池优化", if (battery) "已允许" else "未允许（服务可能被系统清理）", battery),
-            Status("补漏检测", if (prefs.passiveCapture) "开" else "关", null),
-            Status("设备", "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE}（API ${Build.VERSION.SDK_INT}）", null),
-            Status("随贴版本", versionOf(ctx), null),
+            Status(tr("显示在其他应用上层", "Display over other apps"), if (Settings.canDrawOverlays(ctx)) tr("已允许", "Allowed") else tr("未允许", "Not allowed"), Settings.canDrawOverlays(ctx)),
+            Status(tr("忽略电池优化", "Battery optimisation ignored"), if (battery) tr("已允许", "Allowed") else tr("未允许（服务可能被系统清理）", "Not allowed (the service may be stopped)"), battery),
+            Status(tr("补漏检测", "Catch-up checks"), if (prefs.passiveCapture) tr("开", "On") else tr("关", "Off"), null),
+            Status(
+                tr("记录", "History"), if (!ClipStore.loaded.value) tr("正在读取", "Loading") else
+                    tr("%d 条记录，%d 条常用语（上限 %s）", "%d items, %d phrases (limit %s)",
+                        ClipStore.history().size, ClipStore.phrases().size, Prefs.maxItemsLabel(prefs.maxItems)),
+                null,
+            ),
+            Status(tr("设备", "Device"), "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE}（API ${Build.VERSION.SDK_INT}）", null),
+            Status(tr("随贴版本", "ClipDock version"), versionOf(ctx), null),
         )
     }
 
@@ -161,11 +170,11 @@ object Diag {
 
     /** 纯文本报告：不含剪贴板内容；做过事件采样时会带上按钮文字（8 个字以内）和窗口标题 */
     fun report(ctx: Context): String = buildString {
-        append("【随贴 收录诊断】\n")
-        status(ctx).forEach { append(it.name).append("：").append(it.value).append('\n') }
-        crashFile?.takeIf { it.exists() }?.let { append("\n上次崩溃：").append(runCatching { it.readText() }.getOrDefault("")).append('\n') }
+        append(tr("【随贴 收录诊断】\n", "[ClipDock diagnostics]\n"))
+        status(ctx).forEach { append(it.name).append(tr("：", ": ")).append(it.value).append('\n') }
+        crashFile?.takeIf { it.exists() }?.let { append(tr("\n上次崩溃：", "\nLast crash: ")).append(runCatching { it.readText() }.getOrDefault("")).append('\n') }
         val es = entries()
-        append("\n最近 ").append(es.size).append(" 条记录（新→旧）：\n")
+        append(tr("\n最近 %d 条记录（新→旧）：\n", "\nLast %d entries (newest first):\n", es.size))
         es.forEach { e ->
             append(timeLabel(e.time)).append(' ').append(e.trigger).append(" → ").append(e.result)
             if (e.count > 1) append(" ×").append(e.count)
@@ -175,40 +184,46 @@ object Diag {
         }
         val samples = synchronized(this@Diag) { sampleLines.toList() }
         if (samples.isNotEmpty()) {
-            append("\n事件采样（").append(samples.size).append(" 行）：\n")
+            append(tr("\n事件采样（%d 行）：\n", "\nEvent samples (%d lines):\n", samples.size))
             samples.forEach { append(it).append('\n') }
         }
     }
 
     fun triggerName(t: String) = when (t) {
-        "KEY_COPY" -> "键盘 Ctrl+C / X"
-        "CLICK_COPY" -> "点了“复制”"
-        "LONG_CLICK" -> "长按菜单里的点击"
-        "SELECTION_END" -> "文字选区消失"
-        "COPIED_TOAST" -> "出现“已复制”提示"
-        "SYSTEM_CLIP_UI" -> "系统剪贴板预览"
-        "APP_SWITCH" -> "切换应用"
-        "UNLOCK" -> "解锁屏幕"
-        "PANEL_OPEN" -> "打开面板"
-        "SERVICE_START" -> "服务启动"
-        "FOREGROUND" -> "打开随贴"
-        "MANUAL" -> "手动读取"
-        "PROCESS_TEXT" -> "选中文字 › 存到随贴"
-        "SHARE" -> "分享到随贴"
+        "KEY_COPY" -> tr("键盘 Ctrl+C / X", "Ctrl+C / X on the keyboard")
+        "CLICK_COPY" -> tr("点了“复制”", "Tapped “Copy”")
+        "LONG_CLICK" -> tr("长按菜单里的点击", "Tap in a long-press menu")
+        "SELECTION_END" -> tr("文字选区消失", "Text selection ended")
+        "COPIED_TOAST" -> tr("出现“已复制”提示", "“Copied” notice appeared")
+        "SYSTEM_CLIP_UI" -> tr("系统剪贴板预览", "System clipboard preview")
+        "APP_SWITCH" -> tr("切换应用", "Switched apps")
+        "UNLOCK" -> tr("解锁屏幕", "Unlocked the screen")
+        "PANEL_OPEN" -> tr("打开面板", "Opened the panel")
+        "SERVICE_START" -> tr("服务启动", "Service started")
+        "FOREGROUND" -> tr("打开随贴", "Opened ClipDock")
+        "MANUAL" -> tr("手动读取", "Read manually")
+        "PROCESS_TEXT" -> tr("选中文字 › 存到随贴", "Selected text › Save to ClipDock")
+        "SHARE" -> tr("分享到随贴", "Shared to ClipDock")
+        "BACKUP" -> tr("自动备份", "Automatic backup")
+        "DB" -> tr("保存记录", "Saving")
+        "MIGRATE" -> tr("导入旧版本的记录", "Importing old history")
         else -> t
     }
 
     fun resultName(r: String) = when (r) {
-        NEW -> "已记录"
-        DUP -> "内容没变"
-        EMPTY -> "没读到文字（剪贴板为空，或系统没放行）"
-        NO_FOCUS -> "没读到（探针未获得焦点）"
-        ADD_FAIL -> "没读到（探针窗口添加失败）"
-        FALLBACK -> "没读到剪贴板，用了选中的文字"
+        NEW -> tr("已记录", "Recorded")
+        DUP -> tr("内容没变", "Unchanged")
+        EMPTY -> tr("没读到文字（剪贴板为空，或系统没放行）", "No text (clipboard empty or blocked)")
+        NO_FOCUS -> tr("没读到（探针未获得焦点）", "Not read (probe got no focus)")
+        ADD_FAIL -> tr("没读到（探针窗口添加失败）", "Not read (couldn't add the probe window)")
+        FALLBACK -> tr("没读到剪贴板，用了选中的文字", "Used the selected text instead")
+        OK -> tr("完成", "Done")
+        ERROR -> tr("出错", "Error")
+        SKIPPED -> tr("敏感内容，按设置没有记录", "Sensitive — skipped by your settings")
         else -> r
     }
 
-    fun isFailure(r: String) = r == NO_FOCUS || r == ADD_FAIL
+    fun isFailure(r: String) = r == NO_FOCUS || r == ADD_FAIL || r == ERROR
 }
 
 /** 系统设置里是否开着随贴的无障碍服务（开着但 [ClipService.instance] 为空，说明服务被系统停掉了） */

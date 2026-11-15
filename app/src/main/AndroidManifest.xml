@@ -5,39 +5,45 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- 引导关闭电池优化，避免服务被清理 -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- 查看隐藏内容前验证身份（指纹 / 锁屏密码） -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- 自动备份的定时任务在重启后保留 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <uses-feature android:name="android.hardware.fingerprint" android:required="false" />
 
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
- android:supportsRtl="true"
+        android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
- <!-- 桌面图标入口：按设置打开主界面或直接唤起悬浮面板 -->
- <activity
-     android:name=".LauncherActivity"
-     android:excludeFromRecents="true"
-     android:exported="true"
+        <!-- 桌面图标入口：按设置打开主界面或直接唤起悬浮面板 -->
+        <activity
+            android:name=".LauncherActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
             android:noHistory="true"
-     android:taskAffinity=""
-     android:theme="@android:style/Theme.NoDisplay">
-     <intent-filter>
-         <action android:name="android.intent.action.MAIN" />
-  <category android:name="android.intent.category.LAUNCHER" />
-     </intent-filter>
-     <meta-data
-  android:name="android.app.shortcuts"
-  android:resource="@xml/shortcuts" />
- </activity>
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity>
 
         <!-- 唤起 / 关闭悬浮面板（桌面长按快捷方式用） -->
         <activity
-     android:name=".PanelActivity"
-     android:excludeFromRecents="true"
-     android:exported="true"
-     android:noHistory="true"
-     android:taskAffinity=""
+            android:name=".PanelActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:taskAffinity=""
             android:theme="@android:style/Theme.NoDisplay" />
 
         <!-- 不需要无障碍的收录入口：选中文字 › 存到随贴；分享 › 存到随贴 -->
@@ -62,33 +68,47 @@
         </activity>
 
         <activity
-     android:name=".MainActivity"
-     android:exported="true"
-     android:launchMode="singleTask"
-     android:windowSoftInputMode="adjustResize" />
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize" />
 
- <service
-     android:name=".ClipService"
-     android:exported="true"
-     android:label="@string/app_name"
+        <!-- 验证身份：只有系统验证框（或应用密码框），背景透明 -->
+        <activity
+            android:name=".UnlockActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:theme="@style/UnlockTheme" />
+
+        <service
+            android:name=".ClipService"
+            android:exported="true"
+            android:label="@string/app_name"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-     <intent-filter>
-         <action android:name="android.accessibilityservice.AccessibilityService" />
-     </intent-filter>
-     <meta-data
-         android:name="android.accessibilityservice"
-         android:resource="@xml/accessibility_service" />
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service" />
         </service>
 
         <service
-     android:name=".PanelTileService"
-     android:exported="true"
-     android:icon="@drawable/ic_clip"
+            android:name=".PanelTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_clip"
             android:label="@string/tile_label"
-     android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-     <intent-filter>
-  <action android:name="android.service.quicksettings.action.QS_TILE" />
-     </intent-filter>
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
         </service>
+
+        <!-- 自动备份（系统定时叫醒） -->
+        <service
+            android:name=".BackupJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
     </application>
 </manifest>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ClipDock</string>
+    <string name="tile_label">Clipboard</string>
+    <string name="shortcut_panel">Floating panel</string>
+    <string name="save_to_clipdock">Save to ClipDock</string>
+    <string name="shortcut_main">Main screen</string>
+    <string name="a11y_desc">Turns on enhanced mode: it records what you copy in the background, opens the floating panel with a keyboard hotkey (Win+V by default) without stealing focus, and can paste the selected item straight into the text field. Everything stays on this device; the app has no internet permission.</string>
+</resources>
