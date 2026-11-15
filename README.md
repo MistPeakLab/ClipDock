@@ -92,7 +92,7 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 </tr>
 <tr>
 <td align="center"><b>悬浮面板</b><br>Win + V 唤出，直接打字就搜，1–9 快选</td>
-<td align="center"><b>主界面</b><br>平板横屏布局：侧边栏分类 + 卡片网格</td>
+<td align="center"><b>记录 / 收藏 / 我的</b><br>三区导航，深色模式；顶部筛选「今天 / 链接 / 类型 / 来源」</td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/screenshots/multiselect-all.jpg" alt="Ctrl+A 全选"></td>
@@ -204,6 +204,31 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 - 手机竖屏：底部导航、单列卡片，悬浮面板变成贴底抽屉
 - **中英文界面**随系统语言切换（设置里也能改）
 - 深色 / 浅色主题
+
+<p align="center">
+<img src="docs/screenshots/features.jpg" width="49%" alt="简洁 / 全能模式和逐项开关">
+<img src="docs/screenshots/backup.jpg" width="49%" alt="备份与导入导出">
+</p>
+<p align="center"><sub><b>简洁 / 全能，一键切换</b>　也可以逐项开关，关掉的功能在面板和菜单里都不出现　·　<b>备份与导入导出</b>　可以设密码，自动备份按天或按周写到你选的文件夹</sub></p>
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/privacy.jpg" alt="隐私：隐藏内容与自动识别"></td>
+<td width="50%"><img src="docs/screenshots/transform.jpg" alt="粘贴前变换"></td>
+</tr>
+<tr>
+<td align="center"><b>隐藏内容</b><br>加密保存，查看或粘贴前验证指纹 / 锁屏密码</td>
+<td align="center"><b>粘贴前变换</b><br>去换行、转大小写、去跟踪参数……不改原记录</td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/item-menu.jpg" alt="条目菜单"></td>
+<td width="50%"><img src="docs/screenshots/trash.jpg" alt="回收站"></td>
+</tr>
+<tr>
+<td align="center"><b>每个条目的完整菜单</b><br>查看 / 复制 / 变换 / 分享 / 编辑 / 常用语 / 备注 / 分组 / 隐藏 / 删除</td>
+<td align="center"><b>回收站</b><br>删除的、超出上限的记录保留 30 天，随时恢复</td>
+</tr>
+</table>
 
 ---
 
