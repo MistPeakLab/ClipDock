@@ -81,7 +81,7 @@ private fun ChipRow(chips: List<Chip>, selected: String, onSelect: (String) -> U
 // ---------------- 记录 ----------------
 
 @Composable
-fun RecordsPage(tick: Int) {
+fun RecordsPage(tick: Int, onOpen: (Sub) -> Unit = {}) {
     val ctx = LocalContext.current
     val items by ClipStore.items.collectAsStateWithLifecycle()
     val loaded by ClipStore.loaded.collectAsStateWithLifecycle()
@@ -120,13 +120,7 @@ fun RecordsPage(tick: Int) {
 
     Column(Modifier.fillMaxSize()) {
         PageHeader(tr("记录", "History"), query, { query = it }) {
-            HeaderIcon(R.drawable.ic_download, tr("读取当前剪贴板", "Read clipboard")) {
-                ctx.toast(if (ClipReader.capture(ctx, "MANUAL")) tr("已读取当前剪贴板", "Clipboard saved") else tr("剪贴板里没有文字", "No text in the clipboard"))
-            }
-            HeaderIcon(R.drawable.ic_open, tr("打开悬浮面板", "Open floating panel")) {
-                if (!PanelHost.show(ctx)) ctx.toast(tr("需要先允许“显示在其他应用上层”", "Allow “Display over other apps” first"))
-                else (ctx as? Activity)?.moveTaskToBack(true)
-            }
+            HeaderIcon(R.drawable.ic_swap, tr("导入导出", "Import & export")) { onOpen(Sub.Backup) }
         }
         ChipRow(chips, if (chips.any { it.key == filter }) filter else F_ALL) { filter = it }
         if (collectOn) CollectBar(collect)

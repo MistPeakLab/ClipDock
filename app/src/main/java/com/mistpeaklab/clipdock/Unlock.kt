@@ -11,9 +11,13 @@ import android.os.CancellationSignal
 import android.os.SystemClock
 import android.util.Base64
 import android.widget.Toast
+
+import com.mistpeaklab.clipdock.tr
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -25,9 +29,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mistpeaklab.clipdock.data.Crypto
@@ -139,7 +146,7 @@ class UnlockActivity : ComponentActivity() {
 /** 应用密码：没设过就先设一个（输两遍），设过就输入验证。连续输错会锁一会儿 */
 @Composable
 private fun PinScreen(prefs: Prefs, onDone: (Boolean) -> Unit) {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val ctx = LocalContext.current
     val setting = remember { !Unlock.hasPin(prefs) }
     var pin by remember { mutableStateOf("") }
     var first by remember { mutableStateOf<String?>(null) }
@@ -148,6 +155,7 @@ private fun PinScreen(prefs: Prefs, onDone: (Boolean) -> Unit) {
     val scope = rememberCoroutineScope()
     val fr = remember { FocusRequester() }
     LaunchedEffect(Unit) { fr.requestFocus() }
+    val cs = MaterialTheme.colorScheme
 
     fun submit() {
         if (busy) return
@@ -186,35 +194,62 @@ private fun PinScreen(prefs: Prefs, onDone: (Boolean) -> Unit) {
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Color(0x99000000)), contentAlignment = Alignment.Center) {
+    val title = when {
+        setting && first == null -> tr("设置应用密码", "Set an app passcode")
+        setting -> tr("再输一遍", "Enter it again")
+        else -> tr("输入应用密码", "Enter app passcode")
+    }
+    val subtitle = when {
+        setting -> tr("这台设备没有设置锁屏密码，查看隐藏的内容要用一个应用密码。", "This device has no screen lock, so hidden items are protected by an app passcode.")
+        else -> tr("用来查看或粘贴隐藏的内容", "To view or paste hidden items")
+    }
+
+    // 弹窗式：背景压暗，中间一张圆角卡片
+    Box(
+        Modifier.fillMaxSize().background(Color(0xD9000000)).padding(24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
         Column(
-            Modifier.widthIn(max = 360.dp).padding(24.dp).clip(RoundedCornerShape(20.dp))
-                .background(MaterialTheme.colorScheme.surface).padding(24.dp),
+            Modifier.widthIn(max = 400.dp).fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(cs.surface)
+                .border(1.dp, cs.outlineVariant, RoundedCornerShape(28.dp))
+                .padding(horizontal = 28.dp, vertical = 30.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                if (!setting) tr("输入应用密码", "Enter app passcode") else if (first == null) tr("设置应用密码", "Set an app passcode") else tr("再输一遍", "Enter it again"),
-                fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
-            )
+            Image(painterResource(R.mipmap.ic_launcher_fg), null, Modifier.size(64.dp))
+            Spacer(Modifier.height(12.dp))
+            Text(title, fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
             Spacer(Modifier.height(6.dp))
-            Text(
-                if (setting) tr("这台设备没有设置锁屏密码，查看隐藏的内容要用一个应用密码（4–8 位数字）。忘了它，隐藏的内容就看不到了。",
-                    "This device has no screen lock, so hidden items are protected by an app passcode (4–8 digits). If you forget it, hidden items can't be viewed.")
-                else tr("用来查看或粘贴隐藏的内容", "To view or paste hidden items"),
-                fontSize = 13.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(16.dp))
+            Text(subtitle, fontSize = 13.sp, lineHeight = 19.sp, color = cs.onSurfaceVariant, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(20.dp))
             OutlinedTextField(
                 pin, { v -> pin = v.filter { it.isDigit() }.take(8); msg = null },
                 singleLine = true, visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                textStyle = MaterialTheme.typography.headlineSmall.copy(textAlign = TextAlign.Center, letterSpacing = 6.sp),
+                shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth().focusRequester(fr),
             )
-            msg?.let { Text(it, color = Color(0xFFE5484D), fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp)) }
-            Spacer(Modifier.height(16.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton({ onDone(false) }) { Text(tr("取消", "Cancel")) }
-                Spacer(Modifier.width(8.dp))
-                Button({ submit() }, enabled = !busy) { Text(tr("确定", "OK")) }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                msg ?: if (setting) tr("忘了它，隐藏的内容就再也打不开了", "If you forget it, hidden items can't be opened again")
+                else tr("连续输错会锁定一会儿", "Too many wrong attempts will lock it for a while"),
+                color = if (msg != null) Color(0xFFE5484D) else cs.onSurfaceVariant,
+                fontSize = 12.5.sp, lineHeight = 18.sp, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp).padding(top = 4.dp),
+            )
+            Spacer(Modifier.height(10.dp))
+            Button(
+                { submit() }, enabled = !busy,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+            ) {
+                if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                else Text(tr("确定", "OK"), fontSize = 15.sp)
+            }
+            TextButton({ onDone(false) }, Modifier.padding(top = 2.dp)) {
+                Text(tr("取消", "Cancel"), color = cs.onSurfaceVariant)
             }
         }
     }

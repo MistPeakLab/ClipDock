@@ -58,14 +58,14 @@ class PanelController(
         1 -> false; 2 -> true
         else -> (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
     }
-    private val cBg = if (dark) 0xF51E1F22.toInt() else 0xF7F6F7FA.toInt()
-    private val cCard = if (dark) 0xFF2B2D31.toInt() else 0xFFFFFFFF.toInt()
-    private val cField = if (dark) 0xFF26282C.toInt() else 0xFFECEEF2.toInt()
-    private val cText = if (dark) 0xFFE8EAED.toInt() else 0xFF1F2328.toInt()
-    private val cSub = if (dark) 0xFF9AA0A6.toInt() else 0xFF6B7280.toInt()
+    private val cBg = if (dark) 0xF5202227.toInt() else 0xF7F6F7FA.toInt()
+    private val cCard = if (dark) 0xFF2E3138.toInt() else 0xFFFFFFFF.toInt()
+    private val cField = if (dark) 0xFF292C32.toInt() else 0xFFECEEF2.toInt()
+    private val cText = if (dark) 0xFFF0F2F5.toInt() else 0xFF1F2328.toInt()
+    private val cSub = if (dark) 0xFFB4BAC4.toInt() else 0xFF5F6672.toInt()
     private val cAccent = 0xFF4C8DF6.toInt()
     private val cSelBg = if (dark) 0xFF263452.toInt() else 0xFFE3EDFF.toInt()
-    private val cBorder = if (dark) 0x26FFFFFF else 0x1A000000
+    private val cBorder = if (dark) 0x33FFFFFF else 0x1F000000
 
     private val shadow = 12
     private val minW = 260; private val minH = 240

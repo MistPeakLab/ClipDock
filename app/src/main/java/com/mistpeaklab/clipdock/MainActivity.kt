@@ -76,15 +76,20 @@ fun AppTheme(content: @Composable () -> Unit) {
     val prefs = Prefs(LocalContext.current)
     val dark = when (prefs.theme) { 1 -> false; 2 -> true; else -> isSystemInDarkTheme() }
     val scheme = if (dark) darkColorScheme(
-        primary = Accent, background = Color(0xFF141518), surface = Color(0xFF1C1D21),
-        surfaceVariant = Color(0xFF25272C), surfaceContainer = Color(0xFF1A1B1F),
-        onSurface = Color(0xFFE8EAED), onSurfaceVariant = Color(0xFF9AA0A6), outlineVariant = Color(0x22FFFFFF),
+        primary = Accent, background = Color(0xFF131417), surface = Color(0xFF202227),
+        surfaceVariant = Color(0xFF2A2D34), surfaceContainer = Color(0xFF1B1D21),
+        onSurface = Color(0xFFF0F2F5), onSurfaceVariant = Color(0xFFB4BAC4), outlineVariant = Color(0x33FFFFFF),
     ) else lightColorScheme(
         primary = Accent, background = Color(0xFFF6F7FA), surface = Color.White,
         surfaceVariant = Color(0xFFF0F2F6), surfaceContainer = Color(0xFFEEF1F6),
-        onSurface = Color(0xFF1F2328), onSurfaceVariant = Color(0xFF6B7280), outlineVariant = Color(0x14000000),
+        onSurface = Color(0xFF1F2328), onSurfaceVariant = Color(0xFF5F6672), outlineVariant = Color(0x1F000000),
     )
-    MaterialTheme(colorScheme = scheme, content = content)
+    // Text 没写 color 时用 LocalContentColor；默认是黑色，深色模式下会看不见。
+    // 在主题这一层给出正确的前景色，所有页面和弹窗（包括 Dialog）都跟着生效；
+    // Surface、按钮等组件自己会再覆盖成各自需要的颜色。
+    CompositionLocalProvider(LocalContentColor provides scheme.onSurface) {
+        MaterialTheme(colorScheme = scheme, content = content)
+    }
 }
 
 // ---------------- 结构 ----------------
@@ -124,7 +129,7 @@ fun AppRoot() {
                 notice?.let { NoticeBanner(it) { ClipStore.clearNotice() } }
                 Box(Modifier.weight(1f)) {
                     when (tab) {
-                        Tab.Records -> RecordsPage(tick)
+                        Tab.Records -> RecordsPage(tick) { open(it) }
                         Tab.Favorites -> FavoritesPage()
                         Tab.Me -> if (sub == Sub.None) MePage(tick, open) else SubPage(sub, tick, open) { sub = Sub.None }
                     }

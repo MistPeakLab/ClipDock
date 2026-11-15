@@ -98,9 +98,9 @@ object Undo {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            // 让开“依次粘贴”的小条
-            y = dp(if (PasteQueue.active) 110 else 56)
+            // 放在底部，别挡住顶部的搜索框
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            y = dp(56)
         }
         val wm = wctx.getSystemService(WindowManager::class.java)
         runCatching { wm.addView(bar, lp) }.onSuccess {
