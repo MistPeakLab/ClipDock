@@ -79,10 +79,19 @@ fun AppTheme(content: @Composable () -> Unit) {
         primary = Accent, background = Color(0xFF131417), surface = Color(0xFF202227),
         surfaceVariant = Color(0xFF2A2D34), surfaceContainer = Color(0xFF1B1D21),
         onSurface = Color(0xFFF0F2F5), onSurfaceVariant = Color(0xFFB4BAC4), outlineVariant = Color(0x33FFFFFF),
+        // 弹窗、底部弹层、菜单、选中的筛选标签：都用中性灰 + 品牌蓝，不要 M3 默认的淡紫
+        surfaceContainerLowest = Color(0xFF16171A), surfaceContainerLow = Color(0xFF1E2025),
+        surfaceContainerHigh = Color(0xFF25282E), surfaceContainerHighest = Color(0xFF2C2F36),
+        surfaceTint = Color.Transparent, secondaryContainer = Color(0xFF26354F), onSecondaryContainer = Color(0xFFD6E4FF),
+        primaryContainer = Color(0xFF26354F), onPrimaryContainer = Color(0xFFD6E4FF),
     ) else lightColorScheme(
         primary = Accent, background = Color(0xFFF6F7FA), surface = Color.White,
         surfaceVariant = Color(0xFFF0F2F6), surfaceContainer = Color(0xFFEEF1F6),
         onSurface = Color(0xFF1F2328), onSurfaceVariant = Color(0xFF5F6672), outlineVariant = Color(0x1F000000),
+        surfaceContainerLowest = Color.White, surfaceContainerLow = Color(0xFFF8F9FB),
+        surfaceContainerHigh = Color(0xFFFFFFFF), surfaceContainerHighest = Color(0xFFF0F2F6),
+        surfaceTint = Color.Transparent, secondaryContainer = Color(0xFFE3EDFE), onSecondaryContainer = Color(0xFF1C4FA8),
+        primaryContainer = Color(0xFFE3EDFE), onPrimaryContainer = Color(0xFF1C4FA8),
     )
     // Text 没写 color 时用 LocalContentColor；默认是黑色，深色模式下会看不见。
     // 在主题这一层给出正确的前景色，所有页面和弹窗（包括 Dialog）都跟着生效；
@@ -335,25 +344,53 @@ fun SmallIcon(res: Int, desc: String, tint: Color, onClick: () -> Unit) {
     }
 }
 
-/** 设置类页面的滚动容器 */
+/** 设置类页面的滚动容器：平板上居中、最宽 760dp，手机上铺满 */
 @Composable
 fun PageColumn(
     scroll: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(
-        Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 16.dp, vertical = 8.dp).widthIn(max = 760.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        content = content,
-    )
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        Column(
+            Modifier.widthIn(max = 760.dp).fillMaxWidth().fillMaxHeight().verticalScroll(scroll)
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = content,
+        )
+    }
 }
 
-/** 子页面的标题行：← 返回 + 标题 */
+/**
+ * 子页面的页头：圆形返回按钮 + 标题。
+ * 给了 icon / desc 时，下面再放一块“这一页是干什么的”的说明：大图标 + 一句话。
+ */
 @Composable
-fun SubHeader(title: String, onBack: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Text("←", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurface) }
-        Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+fun SubHeader(title: String, onBack: () -> Unit, icon: Int? = null, desc: String? = null, actions: @Composable RowScope.() -> Unit = {}) {
+    val cs = MaterialTheme.colorScheme
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(cs.surface).border(1.dp, cs.outlineVariant, CircleShape).clickable(onClick = onBack),
+                contentAlignment = Alignment.Center,
+            ) { Text("←", fontSize = 18.sp, color = cs.onSurface) }
+            Spacer(Modifier.weight(1f))
+            actions()
+        }
+        if (icon == null) {
+            Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = cs.onSurface, modifier = Modifier.padding(top = 10.dp))
+        } else {
+            Row(Modifier.padding(top = 14.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(Accent.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(painterResource(icon), null, Modifier.size(26.dp), tint = Accent) }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = cs.onSurface)
+                    if (desc != null) Text(desc, fontSize = 13.sp, lineHeight = 19.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
+                }
+            }
+        }
     }
 }
 

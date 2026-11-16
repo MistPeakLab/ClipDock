@@ -96,6 +96,37 @@ class ScreenshotTest {
         },
     )
 
+    /** “我的”下面的子页：按入口的副标题找（标题和底部导航会重名） */
+    private val subPages = listOf(
+        "permissions" to "权限与模式",
+        "features" to "逐项设置",
+        "panelset" to "快捷键、关闭方式",
+        "paste" to "直接粘贴、清理格式",
+        "record" to "保留条数",
+        "privacy" to "隐藏内容、不记录的应用",
+        "backup" to "导出、导入、自动备份",
+        "trash" to "删除的内容保留",
+        "diag" to "复制了却没记下来",
+        "look" to "主题、界面语言",
+    )
+
+    private fun runSettings(prefix: String, theme: Int) {
+        Prefs(ctx).theme = theme
+        Prefs(ctx).applyMode(Mode.FULL)
+        // 回收站里放两条，截图才有内容
+        ClipStore.history().filter { it.text == "忽略" || it.text.startsWith("The quick") }.forEach { ClipStore.delete(it.id) }
+        TestEnv.settle()
+        L.init(rule.activity)
+        rule.setContent { key(scene) { AppTheme { AppRoot() } } }
+        pause(300)
+        for ((name, entry) in subPages) {
+            scene++; pause(300)
+            runCatching { text("我的").performClick(); pause(); text(entry).performClick(); pause(800); TestEnv.settle(); pause(300) }
+                .onFailure { println("子页 $name 失败：$it") }
+            capture("$prefix-$name")
+        }
+    }
+
     private fun run(prefix: String, theme: Int, mode: Mode = Mode.FULL) {
         Prefs(ctx).theme = theme
         Prefs(ctx).applyMode(mode)
@@ -125,8 +156,14 @@ class ScreenshotTest {
             if (w !== main && lp != null && lp.flags and WindowManager.LayoutParams.FLAG_DIM_BEHIND != 0) {
                 c.drawColor(android.graphics.Color.argb((lp.dimAmount * 255).toInt(), 0, 0, 0))
             }
-            val loc = IntArray(2); w.getLocationOnScreen(loc)
-            c.save(); c.translate(loc[0].toFloat(), loc[1].toFloat()); w.draw(c); c.restore()
+            // Robolectric 不给窗口排位置：按窗口自己的 gravity + x/y 算（弹窗默认居中，Popup/悬浮面板是左上角 + 偏移）
+            val pos = android.graphics.Rect()
+            if (w === main || lp == null) pos.set(0, 0, w.width, w.height)
+            else android.view.Gravity.apply(
+                if (lp.gravity == 0) android.view.Gravity.TOP or android.view.Gravity.START else lp.gravity,
+                w.width, w.height, android.graphics.Rect(0, 0, main.width, main.height), lp.x, lp.y, pos, w.layoutDirection,
+            )
+            c.save(); c.translate(pos.left.toFloat(), pos.top.toFloat()); w.draw(c); c.restore()
         }
         out.mkdirs()
         File(out, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -153,4 +190,14 @@ class ScreenshotTest {
 
     @Test @Config(qualifiers = "zh-rCN-w400dp-h860dp-port-mdpi")
     fun phoneDark() = run("phone-dark", 2)
+
+    // 设置子页用加高的屏幕，一屏看完整页
+    @Test @Config(qualifiers = "zh-rCN-w1280dp-h1600dp-land-mdpi")
+    fun settingsTabletLight() = runSettings("set-tablet-light", 1)
+
+    @Test @Config(qualifiers = "zh-rCN-w1280dp-h1600dp-land-mdpi")
+    fun settingsTabletDark() = runSettings("set-tablet-dark", 2)
+
+    @Test @Config(qualifiers = "zh-rCN-w400dp-h1600dp-port-mdpi")
+    fun settingsPhoneLight() = runSettings("set-phone-light", 1)
 }

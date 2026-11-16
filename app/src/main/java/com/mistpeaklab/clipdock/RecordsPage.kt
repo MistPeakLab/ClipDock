@@ -411,7 +411,7 @@ private fun DetailRecords(
                     onDismissRequest = onClearFocus,
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
                 ) {
-                    RecordInspector(ctx, focused, onAction, Modifier.fillMaxWidth().heightIn(max = 600.dp))
+                    RecordInspector(ctx, focused, onAction, Modifier.fillMaxWidth().height(560.dp))
                 }
             }
         }
@@ -481,106 +481,141 @@ private fun RecordTypeBadge(item: ClipItem) {
     }
 }
 
+/**
+ * 详情视图右侧：这一条的“阅读区”。
+ * 上面是和动作条同一套的横向动作胶囊（复制 / 拆开 / 变换 / 分享 / 更多），
+ * 中间是可以选中文字的全文（占满剩余高度），下面是信息和整理动作。
+ */
 @Composable
 private fun RecordInspector(
     ctx: Context, item: ClipItem?, onAction: (ItemAction, ClipItem) -> Unit, modifier: Modifier = Modifier,
 ) {
     val cs = MaterialTheme.colorScheme
     if (item == null) {
-        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(tr("选一条记录，预览和动作会出现在这里", "Pick an item; its preview and actions appear here"),
-                fontSize = 13.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(24.dp))
+        Column(modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Icon(painterResource(R.drawable.ic_empty), null, Modifier.size(64.dp), tint = cs.onSurfaceVariant.copy(alpha = 0.4f))
+            Spacer(Modifier.height(10.dp))
+            Text(tr("选一条记录，全文和动作会出现在这里", "Pick an item; its full text and actions appear here"), fontSize = 13.sp, color = cs.onSurfaceVariant)
+            Spacer(Modifier.height(4.dp))
+            Text(tr("↑ ↓ 选择 · Enter 复制 · 双击复制 · 长按打开动作轮", "↑ ↓ move · Enter copy · double-click copy · long-press for the wheel"), fontSize = 11.5.sp, color = cs.onSurfaceVariant)
         }
         return
     }
-    Column(modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+    val on = { f: Feature -> Features.isOn(ctx, f) }
+    val light = cs.background.luminance() > 0.5f
+    BoxWithConstraints(modifier) {
+    // 窄（手机底部弹层、平板分屏）：动作胶囊里各项等分、图标在上文字在下，不横向滚动
+    val compact = maxWidth < 480.dp
+    Column(Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp)) {
+        // 标题行：类型 + 时间等，右边收藏
         Row(verticalAlignment = Alignment.CenterVertically) {
             RecordTypeBadge(item)
-            Spacer(Modifier.width(8.dp))
-            Text(
-                if (item.hidden) tr("已隐藏的内容", "Hidden item") else Kinds.label(item.kind),
-                fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.weight(1f))
-            IconButton({ onAction(ItemAction.Pin, item) }) {
-                Icon(painterResource(if (item.pinned) R.drawable.ic_gen_star_filled else R.drawable.ic_gen_star), tr("收藏", "Star"), Modifier.size(20.dp), tint = if (item.pinned) Accent else cs.onSurfaceVariant)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(if (item.hidden) tr("已隐藏的内容", "Hidden item") else Kinds.label(item.kind), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(recordMeta(ctx, item), fontSize = 11.5.sp, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            IconButton({ onAction(ItemAction.More, item) }) {
-                Icon(painterResource(R.drawable.ic_gen_more), tr("更多", "More"), Modifier.size(20.dp), tint = cs.onSurfaceVariant)
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(if (item.pinned) Accent.copy(alpha = 0.12f) else cs.surfaceVariant)
+                    .clickable { onAction(ItemAction.Pin, item) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(painterResource(if (item.pinned) R.drawable.ic_gen_star_filled else R.drawable.ic_gen_star),
+                    if (item.pinned) tr("取消收藏", "Unstar") else tr("收藏", "Star"), Modifier.size(19.dp), tint = if (item.pinned) Accent else cs.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        // 动作胶囊：和记录页的动作条同一套样式
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(if (light) Color(0xFFF3F4F7) else Color(0xFF2A2C32))
+                .border(1.dp, cs.outlineVariant, RoundedCornerShape(26.dp)).padding(5.dp)
+                .then(if (compact) Modifier else Modifier.horizontalScroll(rememberScrollState())),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                Modifier.height(42.dp).clip(RoundedCornerShape(21.dp)).background(Accent).clickable { onAction(ItemAction.Copy, item) }
+                    .padding(horizontal = if (compact) 14.dp else 18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(painterResource(R.drawable.ic_gen_copy), null, Modifier.size(18.dp), tint = Color.White)
+                Spacer(Modifier.width(7.dp))
+                Text(tr("复制", "Copy"), color = Color.White, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.width(2.dp))
+            val acts = buildList {
+                if (!item.hidden) add(Triple(R.drawable.ic_gen_pick, tr("拆开", "Pick"), ItemAction.View))
+                if (!item.hidden && on(Feature.TRANSFORM)) add(Triple(R.drawable.ic_gen_transform, tr("变换", "Transform"), ItemAction.Transform))
+                add(Triple(R.drawable.ic_gen_share, tr("分享", "Share"), ItemAction.Share))
+                add(Triple(R.drawable.ic_gen_more, tr("更多", "More"), ItemAction.More))
+            }
+            for ((ic, label, act) in acts) {
+                if (compact) Column(
+                    Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(14.dp)).clickable { onAction(act, item) },
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(painterResource(ic), null, Modifier.size(17.dp), tint = cs.onSurface)
+                    Text(label, fontSize = 10.5.sp, lineHeight = 13.sp, color = cs.onSurface, maxLines = 1)
+                }
+                else DockItem(ic, label, cs.onSurface) { onAction(act, item) }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        // 全文：占满剩余高度，可以直接选中一部分复制
+        Box(
+            Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(16.dp)).background(cs.surface)
+                .border(1.dp, cs.outlineVariant, RoundedCornerShape(16.dp)),
+        ) {
+            if (item.hidden) {
+                Column(Modifier.fillMaxSize().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Icon(painterResource(R.drawable.ic_gen_lock), null, Modifier.size(32.dp), tint = cs.onSurfaceVariant)
+                    Spacer(Modifier.height(8.dp))
+                    Text(tr("已隐藏。验证身份后才能查看或复制。", "Hidden. Verify to view or copy it."), fontSize = 13.sp, color = cs.onSurfaceVariant)
+                }
+            } else {
+                val shown = remember(item.id, item.text) { item.text.take(20_000) }
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+                    SelectionContainer {
+                        Text(shown, fontSize = 15.sp, lineHeight = 24.sp, color = if (item.hasLink) Accent else cs.onSurface)
+                    }
+                    if (item.text.length > shown.length) Text(tr("（太长了，这里只显示前 2 万字；“拆开”里能看到全文）", "(Too long: showing the first 20,000 characters; Pick shows all)"),
+                        fontSize = 12.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+        }
+        if (item.note != null) {
+            Row(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Accent.copy(alpha = 0.08f))
+                .clickable { onAction(ItemAction.Note, item) }.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(painterResource(R.drawable.ic_gen_note), null, Modifier.size(15.dp), tint = Accent)
+                Spacer(Modifier.width(8.dp))
+                Text(item.note, fontSize = 13.sp, color = Accent, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
         Spacer(Modifier.height(10.dp))
-        Box(
-            Modifier.fillMaxWidth().heightIn(min = 110.dp, max = 220.dp).clip(RoundedCornerShape(14.dp))
-                .background(cs.surfaceVariant).padding(14.dp).verticalScroll(rememberScrollState()),
-        ) {
-            SelectionContainer {
-                Text(
-                    if (item.hidden) tr("已隐藏的内容。验证身份后才能查看或复制。", "Hidden. Verify to view or copy it.")
-                    else item.preview,
-                    fontSize = 14.sp, lineHeight = 21.sp, color = if (item.hasLink) Accent else cs.onSurface,
-                )
-            }
+        // 整理：小胶囊按钮，排不下就换行
+        @OptIn(ExperimentalLayoutApi::class)
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (on(Feature.GROUP)) OrganizeChip(R.drawable.ic_gen_folder, tr("分组", "Group")) { onAction(ItemAction.Group, item) }
+            if (on(Feature.NOTE)) OrganizeChip(R.drawable.ic_gen_note, if (item.note == null) tr("备注", "Note") else tr("改备注", "Edit note")) { onAction(ItemAction.Note, item) }
+            if (on(Feature.HIDE)) OrganizeChip(R.drawable.ic_gen_lock, if (item.hidden) tr("取消隐藏", "Unhide") else tr("隐藏", "Hide")) { onAction(ItemAction.Hide, item) }
+            if (!item.hidden) OrganizeChip(R.drawable.ic_gen_edit, tr("编辑", "Edit")) { onAction(ItemAction.Edit, item) }
+            OrganizeChip(R.drawable.ic_gen_trash, tr("删除", "Delete"), danger = true) { onAction(ItemAction.Delete, item) }
         }
-        Spacer(Modifier.height(8.dp))
-        Text(recordMeta(ctx, item), fontSize = 11.5.sp, color = cs.onSurfaceVariant)
-        if (item.note != null) Text("✎ " + item.note, fontSize = 11.5.sp, color = Accent, modifier = Modifier.padding(top = 3.dp))
-        Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button({ onAction(ItemAction.Copy, item) }, Modifier.weight(1f).height(44.dp), shape = RoundedCornerShape(12.dp)) {
-                Icon(painterResource(R.drawable.ic_gen_copy), null, Modifier.size(17.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(tr("复制", "Copy"), fontSize = 13.sp)
-            }
-            OutlinedButton({ onAction(ItemAction.View, item) }, Modifier.weight(1f).height(44.dp), shape = RoundedCornerShape(12.dp)) {
-                Text(tr("查看全文", "View all"), fontSize = 13.sp)
-            }
-        }
-        Spacer(Modifier.height(14.dp))
-        Text(tr("动作", "Actions"), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurfaceVariant)
-        Spacer(Modifier.height(6.dp))
-        val actions = listOf(
-            Triple(ItemAction.View, R.drawable.ic_gen_pick, tr("拆开挑选", "Pick part")),
-            Triple(ItemAction.Transform, R.drawable.ic_gen_transform, tr("变换", "Transform")),
-            Triple(ItemAction.Pin, if (item.pinned) R.drawable.ic_gen_star_filled else R.drawable.ic_gen_star, if (item.pinned) tr("取消收藏", "Unstar") else tr("收藏", "Star")),
-            Triple(ItemAction.Group, R.drawable.ic_gen_folder, tr("分组", "Group")),
-            Triple(ItemAction.Note, R.drawable.ic_gen_note, tr("备注", "Note")),
-            Triple(ItemAction.Hide, R.drawable.ic_gen_lock, if (item.hidden) tr("取消隐藏", "Unhide") else tr("隐藏", "Hide")),
-            Triple(ItemAction.Share, R.drawable.ic_gen_share, tr("分享", "Share")),
-            Triple(ItemAction.Edit, R.drawable.ic_gen_edit, tr("编辑", "Edit")),
-            Triple(ItemAction.Delete, R.drawable.ic_gen_trash, tr("删除", "Delete")),
-        )
-        actions.chunked(3).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                row.forEach { (action, icon, label) ->
-                    ActionTile(icon, label, danger = action == ItemAction.Delete, modifier = Modifier.weight(1f)) {
-                        onAction(action, item)
-                    }
-                }
-                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
-            }
-            Spacer(Modifier.height(6.dp))
-        }
-        Text(
-            tr("双击列表项直接复制；长按列表项或点“更多”打开动作轮。", "Double-click a row to copy; long-press a row or tap More for the action wheel."),
-            fontSize = 11.sp, lineHeight = 16.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp),
-        )
+    }
     }
 }
 
 @Composable
-private fun ActionTile(icon: Int, label: String, danger: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun OrganizeChip(icon: Int, label: String, danger: Boolean = false, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    Column(
-        modifier.clip(RoundedCornerShape(10.dp))
-            .background(cs.surfaceVariant.copy(alpha = 0.55f))
-            .border(1.dp, cs.outlineVariant, RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick).padding(vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    val fg = if (danger) Danger else cs.onSurface
+    Row(
+        Modifier.height(38.dp).clip(CircleShape).border(1.dp, if (danger) Danger.copy(alpha = 0.4f) else cs.outlineVariant, CircleShape)
+            .clickable(onClick = onClick).padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(painterResource(icon), null, Modifier.size(17.dp), tint = if (danger) Danger else cs.onSurfaceVariant)
-        Spacer(Modifier.height(3.dp))
-        Text(label, fontSize = 10.5.sp, color = if (danger) Danger else cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Icon(painterResource(icon), null, Modifier.size(16.dp), tint = if (danger) Danger else cs.onSurfaceVariant)
+        Spacer(Modifier.width(6.dp))
+        Text(label, fontSize = 13.sp, color = fg)
     }
 }
 

@@ -14,11 +14,21 @@ data class Hotkey(val keyCode: Int, val mods: Int) {
         if (mods and CTRL != 0) parts += "Ctrl"
         if (mods and ALT != 0) parts += "Alt"
         if (mods and SHIFT != 0) parts += "Shift"
-        parts += KeyEvent.keyCodeToString(keyCode).removePrefix("KEYCODE_")
+        parts += keyName(keyCode)
         return parts.joinToString(" + ")
     }
 
     companion object {
+        /** 键名；字母数字自己算，避免某些环境下 keyCodeToString 只给出数字 */
+        fun keyName(code: Int): String = when (code) {
+            in KeyEvent.KEYCODE_A..KeyEvent.KEYCODE_Z -> ('A' + (code - KeyEvent.KEYCODE_A)).toString()
+            in KeyEvent.KEYCODE_0..KeyEvent.KEYCODE_9 -> ('0' + (code - KeyEvent.KEYCODE_0)).toString()
+            KeyEvent.KEYCODE_SPACE -> "Space"
+            KeyEvent.KEYCODE_ENTER -> "Enter"
+            KeyEvent.KEYCODE_GRAVE -> "`"
+            else -> KeyEvent.keyCodeToString(code).removePrefix("KEYCODE_")
+        }
+
         const val CTRL = 1
         const val ALT = 2
         const val SHIFT = 4

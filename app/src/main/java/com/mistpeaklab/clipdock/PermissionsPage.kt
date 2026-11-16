@@ -70,22 +70,51 @@ private fun requestBattery(ctx: Context) = runCatching {
 
 /** 一张权限卡片：开了能做什么、现在的状态、去开启 */
 @Composable
-private fun PermCard(title: String, desc: String, ok: Boolean, action: String, extra: String? = null, onAction: () -> Unit) {
+private fun PermCard(title: String, desc: String, ok: Boolean, action: String, extra: String? = null, icon: Int = R.drawable.ic_gen_shield, onAction: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(cs.surface)
-            .border(1.dp, cs.outlineVariant, RoundedCornerShape(14.dp)).padding(16.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(cs.surface)
+            .border(if (ok) 1.dp else 1.5.dp, if (ok) cs.outlineVariant else Warn.copy(alpha = 0.45f), RoundedCornerShape(18.dp)).padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            RowIcon(icon, tint = if (ok) Okay else Accent, bg = (if (ok) Okay else Accent).copy(alpha = 0.12f))
+            Spacer(Modifier.width(12.dp))
             Text(title, fontWeight = FontWeight.SemiBold, color = cs.onSurface, modifier = Modifier.weight(1f))
             val c = if (ok) Okay else Warn
             Text(if (ok) tr("已开启", "On") else tr("未开启", "Off"), fontSize = 12.sp, color = c,
-                modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(c.copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 1.dp))
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(c.copy(alpha = 0.12f)).padding(horizontal = 10.dp, vertical = 3.dp))
         }
         Spacer(Modifier.height(4.dp))
         Text(desc, fontSize = 13.sp, lineHeight = 19.sp, color = cs.onSurfaceVariant)
         if (!ok && extra != null) Text(extra, fontSize = 12.sp, lineHeight = 18.sp, color = Warn, modifier = Modifier.padding(top = 6.dp))
-        if (!ok) Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) { Button(onAction) { Text(action) } }
+        if (!ok) Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End) { PillButton(action, primary = true) { onAction() } }
+    }
+}
+
+/** 顶部的进度：已开启几项，现在是哪一档 */
+@Composable
+private fun PermSummary(tick: Int) {
+    val ctx = LocalContext.current
+    val cs = MaterialTheme.colorScheme
+    val states = remember(tick) { listOf(overlayOk(ctx), a11yOk(), batteryOk(ctx)) }
+    val n = states.count { it }
+    val level = remember(tick) { abilityLevel(ctx) }
+    val (label, color) = when (level) {
+        2 -> tr("增强模式：后台记录、快捷键唤起都可用", "Enhanced: background recording and hotkey work") to Okay
+        1 -> tr("基础模式：可以随时唤出悬浮面板", "Basic: the floating panel can be opened anytime") to Accent
+        else -> tr("仅主界面：打开随贴时才记录", "App only: records when ClipDock is open") to Warn
+    }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(cs.surface).border(1.dp, cs.outlineVariant, RoundedCornerShape(18.dp)).padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(tr("已开启 %d / 3", "%d of 3 on", n), fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Box(Modifier.size(8.dp).clip(RoundedCornerShape(50)).background(color))
+            Spacer(Modifier.width(6.dp))
+            Text(label, fontSize = 12.sp, color = color)
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            states.forEach { ok -> Box(Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)).background(if (ok) Okay else cs.surfaceVariant)) }
+        }
     }
 }
 
@@ -102,7 +131,7 @@ private fun PermissionCards(tick: Int, profile: Int) {
             tr("增强模式（无障碍服务）", "Enhanced mode (accessibility service)"),
             tr("开了以后：在后台自动记下复制的文字；实体键盘按 Win+V（可改）唤出面板；面板不抢输入框焦点、不弹输入法；选中后直接贴进输入框。",
                 "Records what you copy in the background; a keyboard hotkey (Win+V, changeable) opens the panel without stealing focus; picks are pasted straight into the text field."),
-            a11y, tr("去开启", "Turn on"),
+            a11y, tr("去开启", "Turn on"), icon = R.drawable.ic_gen_keyboard,
             extra = if (restricted) tr("开关是灰的、提示“受限设置”？先到 系统设置 › 应用 › 随贴 › 右上角 ⋮ › 允许受限设置，再回来开启。",
                 "Switch greyed out (“restricted setting”)? Go to Settings › Apps › ClipDock › ⋮ › Allow restricted settings first.") else null,
         ) { ctx.openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS) }
@@ -112,14 +141,14 @@ private fun PermissionCards(tick: Int, profile: Int) {
             tr("悬浮面板（显示在其他应用上层）", "Floating panel (display over other apps)"),
             tr("开了以后：从桌面图标、通知栏开关、长按图标随时唤出悬浮面板，面板打开的一瞬间读一次剪贴板。",
                 "Open the floating panel from the app icon, quick-settings tile or long-press menu; it reads the clipboard when it opens."),
-            overlay, tr("去允许", "Allow"),
+            overlay, tr("去允许", "Allow"), icon = R.drawable.ic_gen_grid,
         ) { ctx.openSettings(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, withPackage = true) }
     }
     if (keyboard) { a11yCard(); overlayCard() } else { overlayCard(); a11yCard() }
     PermCard(
         tr("保持后台运行", "Keep running in the background"),
         tr("防止系统清理随贴，导致快捷键失效、停止记录。", "Stops the system from killing ClipDock, which would break the hotkey and recording."),
-        battery, tr("去设置", "Set up"),
+        battery, tr("去设置", "Set up"), icon = R.drawable.ic_gen_history,
     ) { requestBattery(ctx) }
     TextButton({ openVendorBackground(ctx) }) { Text(tr("还会被清理？打开手机的“自启动 / 后台运行”设置", "Still getting killed? Open your phone's auto-start settings")) }
 }
@@ -131,7 +160,9 @@ fun PermissionsPage(tick: Int, onBack: () -> Unit) {
     var t by remember { mutableIntStateOf(tick) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { t++ }
     PageColumn {
-        SubHeader(tr("权限与模式", "Permissions"), onBack)
+        SubHeader(tr("权限与模式", "Permissions"), onBack, R.drawable.ic_gen_shield,
+            tr("给多少权限做多少事。每一项都写清楚了开了能做什么。", "ClipDock does as much as you allow. Each item explains what it unlocks."))
+        PermSummary(tick)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Accent.copy(alpha = 0.08f)).padding(16.dp)) {
             Text(tr("为什么没有“允许读取剪贴板”的弹窗？", "Why is there no “allow clipboard access” prompt?"), fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(6.dp))

@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -38,24 +39,22 @@ fun TrashPage(onBack: () -> Unit) {
     val now = remember(rows) { System.currentTimeMillis() }
     val list = rows
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Text("←", fontSize = 20.sp, color = cs.onSurface) }
-            Text(tr("回收站", "Trash"), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = cs.onSurface, modifier = Modifier.weight(1f))
-            val canEmpty = !list.isNullOrEmpty()
-            TextButton(onClick = { confirmEmpty = true }, enabled = canEmpty) {
-                Text(tr("清空回收站", "Empty trash"), color = if (canEmpty) Danger else Color.Unspecified)
-            }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) { Column(Modifier.widthIn(max = 760.dp).fillMaxSize().padding(start = 16.dp, end = 16.dp, top = 8.dp)) {
+        val canEmpty = !list.isNullOrEmpty()
+        SubHeader(tr("回收站", "Trash"), onBack, R.drawable.ic_gen_trash,
+            tr("删除的记录、超出条数上限的旧记录先放在这里，%d 天后自动清理。", "Deleted items and old items over the limit stay here for %d days.", ItemRepo.TRASH_DAYS)) {
+            if (canEmpty) PillButton(tr("清空回收站", "Empty trash"), primary = false) { confirmEmpty = true }
         }
-        Text(
-            tr("删除的记录、超出条数上限的旧记录先放在这里，%d 天后自动清理。", "Deleted items and old items over the limit stay here for %d days.", ItemRepo.TRASH_DAYS),
-            fontSize = 13.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 10.dp),
-        )
+        Spacer(Modifier.height(12.dp))
         when {
             list == null -> Text(tr("正在读取…", "Loading…"), color = cs.onSurfaceVariant, modifier = Modifier.padding(4.dp))
             list.isEmpty() -> Column(
                 Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-            ) { Text(tr("回收站是空的", "The trash is empty"), color = cs.onSurfaceVariant) }
+            ) {
+                Icon(painterResource(R.drawable.ic_empty), null, Modifier.size(72.dp), tint = cs.onSurfaceVariant.copy(alpha = 0.45f))
+                Spacer(Modifier.height(10.dp))
+                Text(tr("回收站是空的", "The trash is empty"), color = cs.onSurfaceVariant)
+            }
             else -> LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(bottom = 24.dp),
@@ -80,7 +79,7 @@ fun TrashPage(onBack: () -> Unit) {
                 }
             }
         }
-    }
+    } }
 
     if (confirmEmpty && list != null) AlertDialog(
         onDismissRequest = { confirmEmpty = false },

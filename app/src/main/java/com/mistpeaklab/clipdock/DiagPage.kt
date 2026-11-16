@@ -32,14 +32,15 @@ fun DiagPage(tick: Int, onBack: () -> Unit) {
     val samplingLeft = ((Diag.sampleUntil - now) / 1000).coerceAtLeast(0)
 
     PageColumn {
-        SubHeader(tr("收录诊断", "Diagnostics"), onBack)
+        SubHeader(tr("收录诊断", "Diagnostics"), onBack, R.drawable.ic_gen_gear,
+            tr("复制了却没记下来？这里能看到随贴察觉到了什么、为什么没读到。", "Copied but not recorded? See what ClipDock noticed and why it couldn't read it."))
 
         Card {
             Text(tr("现在的状态", "Current state"), fontWeight = FontWeight.SemiBold, color = cs.onSurface)
             Spacer(Modifier.height(8.dp))
             status.forEach { s ->
                 Row(Modifier.padding(vertical = 3.dp)) {
-                    Text(s.name, Modifier.width(150.dp), fontSize = 13.sp, color = cs.onSurfaceVariant)
+                    Text(s.name, Modifier.width(184.dp), fontSize = 13.sp, color = cs.onSurfaceVariant)
                     Text(
                         s.value, Modifier.weight(1f), fontSize = 13.sp, lineHeight = 18.sp,
                         color = when (s.ok) { true -> Okay; false -> Warn; null -> cs.onSurface },

@@ -172,7 +172,7 @@ internal fun TransformDialog(text: String, onDismiss: () -> Unit) {
         ) {
             val shape = if (phone) RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp) else RoundedCornerShape(28.dp)
             Column(
-                keys.fillMaxWidth().widthIn(max = 880.dp).heightIn(max = if (phone) 720.dp else 680.dp)
+                keys.widthIn(max = 880.dp).fillMaxWidth().heightIn(max = if (phone) 720.dp else 680.dp)
                     .shadow(24.dp, shape).clip(shape).background(cs.surface)
                     .clickable(interactionSource = null, indication = null) {}
                     .padding(start = 24.dp, end = 24.dp, top = if (phone) 10.dp else 22.dp, bottom = 20.dp),
