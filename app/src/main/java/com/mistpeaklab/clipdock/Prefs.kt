@@ -74,6 +74,9 @@ class Prefs(context: Context) {
     /** 面板上次停留的标签：0 最近 1 收藏，2 起是各个分组 */
     var panelTab by int("panel_tab", 0)
 
+    /** 记录页布局：0 聚拢（卡片墙，默认），1 详情（列表 + 右侧面板） */
+    var recordsLayout by int("records_layout", 0)
+
     /** 点桌面图标时直接唤起悬浮面板（否则打开主界面） */
     var iconOpensPanel by bool("icon_opens_panel", false)
 
@@ -95,11 +98,18 @@ class Prefs(context: Context) {
     var panelX by int("panel_x", -1)
     var panelY by int("panel_y", -1)
 
-    fun resetPanelPosition() = sp.edit().remove("panel_x").remove("panel_y").remove("panel_w").remove("panel_h").apply()
+    fun resetPanelPosition() = sp.edit().remove("panel_x").remove("panel_y").remove("panel_w").remove("panel_h")
+        .remove("panel_px").remove("panel_py").remove("panel_pw").remove("panel_ph").apply()
 
     // 面板尺寸（dp）
     var panelW by int("panel_w", 340)
     var panelH by int("panel_h", 420)
+
+    // 手机竖屏（宽度 < 600dp）单独记一套位置和大小，和平板 / 横屏互不覆盖。-1 表示用默认
+    var panelPhoneX by int("panel_px", -1)
+    var panelPhoneY by int("panel_py", -1)
+    var panelPhoneW by int("panel_pw", -1)
+    var panelPhoneH by int("panel_ph", -1)
 
     /** 面板每条最多显示几行 */
     var previewLines by int("preview_lines", 2)

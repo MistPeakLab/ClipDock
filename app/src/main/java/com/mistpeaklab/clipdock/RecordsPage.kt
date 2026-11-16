@@ -4,20 +4,25 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
+import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,7 +34,24 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -37,11 +59,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mistpeaklab.clipdock.util.ContentKind
 import com.mistpeaklab.clipdock.util.Search
 import com.mistpeaklab.clipdock.util.TextTransforms
 import com.mistpeaklab.clipdock.util.Transform
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.roundToInt
+import kotlin.math.sin
 
 // ---------------- 筛选 ----------------
 
@@ -83,6 +113,7 @@ private fun ChipRow(chips: List<Chip>, selected: String, onSelect: (String) -> U
 @Composable
 fun RecordsPage(tick: Int, onOpen: (Sub) -> Unit = {}) {
     val ctx = LocalContext.current
+    val prefs = remember { Prefs(ctx) }
     val items by ClipStore.items.collectAsStateWithLifecycle()
     val loaded by ClipStore.loaded.collectAsStateWithLifecycle()
     val collect by ClipStore.collect.collectAsStateWithLifecycle()
@@ -93,7 +124,16 @@ fun RecordsPage(tick: Int, onOpen: (Sub) -> Unit = {}) {
     val collectOn = remember(fv) { Features.isOn(ctx, Feature.COLLECT) }
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(F_ALL) }
+    var layout by rememberSaveable { mutableIntStateOf(prefs.recordsLayout) }
+    var focusId by rememberSaveable { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf(emptySet<String>()) }
+    var selectMode by remember { mutableStateOf(false) }
+    var menuFor by remember { mutableStateOf<ClipItem?>(null) }
+    var wheelFor by remember { mutableStateOf<ClipItem?>(null) }
+    var wheelAnchor by remember { mutableStateOf<Rect?>(null) }
+    var quick by remember { mutableStateOf<MenuState?>(null) }
+    var dialogItem by remember { mutableStateOf<ClipItem?>(null) }
+    val phone = LocalConfiguration.current.screenWidthDp < 600
 
     val history = remember(items) { items.filter { !it.phrase } }
     // tick 也算进去：过了零点，“今天”要跟着变
@@ -117,20 +157,617 @@ fun RecordsPage(tick: Int, onOpen: (Sub) -> Unit = {}) {
         val terms = Search.terms(query)
         if (terms.isEmpty()) l else l.filter { it.matches(terms, pinyin) }
     }
+    val focused = shown.firstOrNull { it.id == focusId } ?: items.firstOrNull { it.id == focusId }
+
+    LaunchedEffect(items, shown) {
+        if (focusId != null && items.none { it.id == focusId }) focusId = null
+        else if (focusId != null && shown.none { it.id == focusId }) focusId = null
+    }
+
+    fun toggleSelect(item: ClipItem) {
+        selected = if (item.id in selected) selected - item.id else selected + item.id
+    }
+
+    fun openDialog(item: ClipItem, state: MenuState) {
+        dialogItem = item
+        quick = state
+    }
+
+    fun run(action: ItemAction, item: ClipItem) {
+        when (action) {
+            ItemAction.Copy -> Act.copy(ctx, item)
+            ItemAction.View -> Act.withText(ctx, item) { openDialog(item, MenuState.Viewer(it)) }
+            ItemAction.Transform -> Act.withText(ctx, item) { openDialog(item, MenuState.Transform(it)) }
+            ItemAction.Pin -> ClipStore.togglePin(item.id)
+            ItemAction.Group -> openDialog(item, MenuState.Group)
+            ItemAction.Note -> openDialog(item, MenuState.Note)
+            ItemAction.Hide -> {
+                if (item.hidden) {
+                    Unlock.run(ctx) { if (!ClipStore.unhide(item.id)) ctx.toast(tr("这条内容解不开了", "Can't decrypt this item")) }
+                } else {
+                    ctx.toast(if (ClipStore.hide(item.id)) tr("已隐藏", "Hidden") else tr("这条不能隐藏（太长，或这台设备不支持加密）", "Can't hide this (too long, or encryption unavailable)"))
+                }
+            }
+            ItemAction.Share -> Act.withText(ctx, item) { Act.share(ctx, it) }
+            ItemAction.Edit -> Act.withText(ctx, item) { openDialog(item, MenuState.Edit(it)) }
+            ItemAction.Delete -> {
+                ClipStore.delete(item.id)
+                Undo.offer(ctx, listOf(item.id))
+                if (focusId == item.id) focusId = null
+            }
+            ItemAction.More -> menuFor = item
+        }
+    }
+
+    fun onKey(e: KeyEvent): Boolean {
+        if (e.type != KeyEventType.KeyDown) return false
+        val list = shown
+        if (list.isEmpty()) return false
+        val idx = list.indexOfFirst { it.id == focusId }.let { if (it < 0) 0 else it }
+        val step = when (e.key) {
+            Key.DirectionDown -> 1
+            Key.DirectionUp -> -1
+            else -> 0
+        }
+        if (step != 0) {
+            focusId = list[(idx + step).coerceIn(0, list.lastIndex)].id
+            return true
+        }
+        if (e.key == Key.Enter && !e.isCtrlPressed) { focused?.let { run(ItemAction.Copy, it) }; return true }
+        if (e.isCtrlPressed && e.key == Key.C) { focused?.let { run(ItemAction.Copy, it) }; return true }
+        if (e.key == Key.DirectionRight) { focused?.let { run(ItemAction.View, it) }; return true }
+        if (e.key == Key.Delete || e.key == Key.Backspace) { focused?.let { run(ItemAction.Delete, it) }; return true }
+        if (e.key == Key.Escape) { focusId = null; selected = emptySet(); selectMode = false; return true }
+        return false
+    }
 
     Column(Modifier.fillMaxSize()) {
         PageHeader(tr("记录", "History"), query, { query = it }) {
-            HeaderIcon(R.drawable.ic_swap, tr("导入导出", "Import & export")) { onOpen(Sub.Backup) }
+            HeaderIcon(
+                if (layout == 0) R.drawable.ic_gen_list else R.drawable.ic_gen_grid,
+                if (layout == 0) tr("详情视图", "Detail view") else tr("聚拢视图", "Card view"),
+            ) {
+                layout = 1 - layout
+                prefs.recordsLayout = layout
+                focusId = null
+            }
+            HeaderIcon(
+                R.drawable.ic_gen_check, tr("多选", "Select"),
+                tint = if (selectMode) Accent else MaterialTheme.colorScheme.onSurfaceVariant,
+            ) {
+                selectMode = !selectMode
+                if (!selectMode) selected = emptySet()
+            }
+            HeaderIcon(R.drawable.ic_gen_swap, tr("导入导出", "Import & export")) { onOpen(Sub.Backup) }
         }
         ChipRow(chips, if (chips.any { it.key == filter }) filter else F_ALL) { filter = it }
         if (collectOn) CollectBar(collect)
-        ItemList(
-            shown, loaded, selected, { selected = it },
-            empty = when {
-                query.isNotBlank() -> tr("没有找到包含“%s”的内容", "Nothing matches “%s”", query)
-                else -> tr("还没有记录，复制一些文字试试", "Nothing yet. Copy some text and it shows up here.")
-            },
+        BoxWithConstraints(Modifier.weight(1f)) {
+            val wide = maxWidth >= 820.dp
+            when {
+                layout == 0 -> GatheredRecords(
+                    ctx, shown, loaded, fv, phone, focusId, selectMode, selected,
+                    empty = if (query.isNotBlank()) tr("没有找到包含“%s”的内容", "Nothing matches “%s”", query)
+                    else tr("还没有记录，复制一些文字试试", "Nothing yet. Copy some text and it shows up here."),
+                    onFocus = { focusId = it.id },
+                    onToggle = ::toggleSelect,
+                    onMenu = { menuFor = it },
+                    onWheel = { item, rect -> wheelAnchor = rect; wheelFor = item },
+                    onKey = ::onKey,
+                )
+                else -> DetailRecords(
+                    ctx, shown, loaded, fv, focusId, phone,
+                    empty = if (query.isNotBlank()) tr("没有找到包含“%s”的内容", "Nothing matches “%s”", query)
+                    else tr("还没有记录，复制一些文字试试", "Nothing yet. Copy some text and it shows up here."),
+                    onFocus = { focusId = it.id },
+                    onWheel = { wheelAnchor = null; wheelFor = it },
+                    onAction = ::run,
+                    onClearFocus = { focusId = null },
+                    onKey = ::onKey,
+                    wide = wide,
+                )
+            }
+            if (layout == 0 && focused != null && !selectMode && selected.isEmpty()) {
+                GatheredDock(focused, phone, Modifier.align(Alignment.BottomCenter), onAction = { run(it, focused) })
+            }
+        }
+        if (selected.isNotEmpty()) SelectionBar(shown, selected) { selected = it }
+        if (layout == 1 && !phone) KeyHints()
+    }
+
+    menuFor?.let { ItemMenu(it) { menuFor = null } }
+    wheelFor?.let { item ->
+        ActionWheel(item, wheelAnchor, onAction = { run(it, item) }, onDismiss = { wheelFor = null; wheelAnchor = null })
+    }
+    when (val d = quick) {
+        is MenuState.Viewer -> TextViewerDialog(d.text) { quick = null; dialogItem = null }
+        is MenuState.Transform -> TransformDialog(d.text) { quick = null; dialogItem = null }
+        is MenuState.Edit -> TextEditDialog(tr("编辑", "Edit"), d.text) { t ->
+            if (t != null) dialogItem?.let { ClipStore.updateText(it.id, t) }
+            quick = null; dialogItem = null
+        }
+        MenuState.Note -> TextEditDialog(tr("备注", "Note"), dialogItem?.note ?: "", singleLine = true, allowEmpty = true) { t ->
+            if (t != null) dialogItem?.let { ClipStore.setNote(it.id, t) }
+            quick = null; dialogItem = null
+        }
+        MenuState.Group -> GroupPickerDialog(dialogItem?.groupId) { gid, chosen ->
+            if (chosen) dialogItem?.let { ClipStore.setGroup(listOf(it.id), gid) }
+            quick = null; dialogItem = null
+        }
+        else -> {}
+    }
+}
+
+private enum class ItemAction { Copy, View, Transform, Pin, Group, Note, Hide, Share, Edit, Delete, More }
+
+@Composable
+private fun GatheredRecords(
+    ctx: Context, list: List<ClipItem>, loaded: Boolean, fv: Int, phone: Boolean,
+    focusId: String?, selectMode: Boolean, picked: Set<String>, empty: String,
+    onFocus: (ClipItem) -> Unit, onToggle: (ClipItem) -> Unit,
+    onMenu: (ClipItem) -> Unit, onWheel: (ClipItem, Rect) -> Unit,
+    onKey: (KeyEvent) -> Boolean,
+) {
+    val current by ClipStore.current.collectAsStateWithLifecycle()
+    val bounds = remember { mutableMapOf<String, Rect>() }
+    val fr = remember { FocusRequester() }
+    val gridState = rememberLazyStaggeredGridState()
+    LaunchedEffect(Unit) { if (!phone) runCatching { fr.requestFocus() } }
+    // 只在选中的那一条不在屏幕上时才滚过去（键盘 ↑↓ 走到屏幕外）；点一下可见的卡片不要让列表跳
+    LaunchedEffect(focusId) {
+        val i = list.indexOfFirst { it.id == focusId }
+        if (i < 0) return@LaunchedEffect
+        val info = gridState.layoutInfo
+        val v = info.visibleItemsInfo.firstOrNull { it.index == i }
+        val fully = v != null && v.offset.y >= info.viewportStartOffset && v.offset.y + v.size.height <= info.viewportEndOffset - 80
+        if (!fully) gridState.animateScrollToItem(i)
+    }
+    Box(Modifier.fillMaxSize().focusRequester(fr).focusable().onKeyEvent { onKey(it) }) {
+        if (list.isEmpty()) {
+            EmptyRecords(loaded, empty)
+            return@Box
+        }
+        LazyVerticalStaggeredGrid(
+            state = gridState,
+            columns = StaggeredGridCells.Adaptive(if (phone) 168.dp else 280.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
+            verticalItemSpacing = 10.dp,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            itemsIndexed(list, key = { _, item -> item.id }) { _, item ->
+                ItemCard(
+                    item, fv, isCurrent = !item.hidden && item.text == current,
+                    picked = item.id == focusId || item.id in picked,
+                    selecting = selectMode || picked.isNotEmpty(),
+                    onClick = {
+                        if (selectMode) onToggle(item) else { fr.requestFocus(); onFocus(item) }
+                    },
+                    onLongClick = { if (selectMode) onToggle(item) else onWheel(item, bounds[item.id] ?: Rect.Zero) },
+                    onMenu = { onMenu(item) },
+                    reorder = null,
+                    onDoubleClick = { Act.copy(ctx, item) },
+                    modifier = Modifier.onGloballyPositioned { bounds[item.id] = it.boundsInWindow() },
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DetailRecords(
+    ctx: Context, list: List<ClipItem>, loaded: Boolean, fv: Int, focusId: String?, phone: Boolean,
+    empty: String, onFocus: (ClipItem) -> Unit, onWheel: (ClipItem) -> Unit,
+    onAction: (ItemAction, ClipItem) -> Unit, onClearFocus: () -> Unit,
+    onKey: (KeyEvent) -> Boolean, wide: Boolean,
+) {
+    val focused = list.firstOrNull { it.id == focusId }
+    val fr = remember { FocusRequester() }
+    val listState = rememberLazyListState()
+    LaunchedEffect(wide) { if (wide) runCatching { fr.requestFocus() } }
+    LaunchedEffect(focusId) {
+        val i = list.indexOfFirst { it.id == focusId }
+        if (i < 0) return@LaunchedEffect
+        val info = listState.layoutInfo
+        val v = info.visibleItemsInfo.firstOrNull { it.index == i }
+        val fully = v != null && v.offset >= info.viewportStartOffset && v.offset + v.size <= info.viewportEndOffset
+        if (!fully) listState.animateScrollToItem(i)
+    }
+    val dense = @Composable { modifier: Modifier ->
+        Box(modifier.focusRequester(fr).focusable().onKeyEvent { onKey(it) }) {
+            if (list.isEmpty()) {
+                EmptyRecords(loaded, empty)
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                ) {
+                    itemsIndexed(list, key = { _, item -> item.id }) { _, item ->
+                        RecordRow(
+                            ctx, item,
+                            selected = item.id == focusId,
+                            onClick = { fr.requestFocus(); onFocus(item) },
+                            onDoubleClick = { Act.copy(ctx, item) },
+                            onLongClick = { onWheel(item) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+    if (wide) {
+        Row(Modifier.fillMaxSize()) {
+            dense(Modifier.weight(0.9f).fillMaxHeight())
+            Box(Modifier.width(1.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant))
+            RecordInspector(ctx, focused, onAction, Modifier.weight(1.1f).fillMaxHeight())
+        }
+    } else {
+        Box(Modifier.fillMaxSize()) {
+            dense(Modifier.fillMaxSize())
+            if (focused != null) {
+                ModalBottomSheet(
+                    onDismissRequest = onClearFocus,
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                ) {
+                    RecordInspector(ctx, focused, onAction, Modifier.fillMaxWidth().heightIn(max = 600.dp))
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RecordRow(
+    ctx: Context, item: ClipItem, selected: Boolean,
+    onClick: () -> Unit, onDoubleClick: () -> Unit, onLongClick: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+            .background(if (selected) Accent.copy(alpha = 0.12f) else Color.Transparent)
+            .combinedClickable(onClick = onClick, onDoubleClick = onDoubleClick, onLongClick = onLongClick)
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RecordTypeBadge(item)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                if (item.hidden) tr("已隐藏的内容 · 点按验证后复制", "Hidden · tap to verify and copy") else item.preview,
+                fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                color = if (item.hasLink) Accent else cs.onSurface,
+            )
+            Text(
+                recordMeta(ctx, item),
+                fontSize = 10.5.sp, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 1.dp),
+            )
+        }
+        if (item.pinned) Text("★", color = Accent, fontSize = 12.sp)
+    }
+}
+
+private fun recordMeta(ctx: Context, item: ClipItem): String {
+    val out = ArrayList<String>(3)
+    out += timeLabel(item.time)
+    out += tr("%d 字", "%d chars", item.chars)
+    item.sourcePkg?.let { out += AppInfo.label(ctx, it) }
+    return out.joinToString(" · ")
+}
+
+@Composable
+private fun RecordTypeBadge(item: ClipItem) {
+    val cs = MaterialTheme.colorScheme
+    val tint = when {
+        item.hidden -> cs.onSurfaceVariant
+        item.kind == ContentKind.URL -> Accent
+        item.kind == ContentKind.PHONE -> Okay
+        item.kind == ContentKind.EMAIL -> Accent
+        else -> cs.onSurfaceVariant
+    }
+    val icon = when {
+        item.hidden -> R.drawable.ic_gen_lock
+        item.kind == ContentKind.URL -> R.drawable.ic_gen_open
+        else -> R.drawable.ic_gen_note
+    }
+    Box(
+        Modifier.size(28.dp).clip(RoundedCornerShape(9.dp)).background(tint.copy(alpha = 0.12f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(painterResource(icon), null, Modifier.size(15.dp), tint = tint)
+    }
+}
+
+@Composable
+private fun RecordInspector(
+    ctx: Context, item: ClipItem?, onAction: (ItemAction, ClipItem) -> Unit, modifier: Modifier = Modifier,
+) {
+    val cs = MaterialTheme.colorScheme
+    if (item == null) {
+        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(tr("选一条记录，预览和动作会出现在这里", "Pick an item; its preview and actions appear here"),
+                fontSize = 13.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(24.dp))
+        }
+        return
+    }
+    Column(modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            RecordTypeBadge(item)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                if (item.hidden) tr("已隐藏的内容", "Hidden item") else Kinds.label(item.kind),
+                fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.weight(1f))
+            IconButton({ onAction(ItemAction.Pin, item) }) {
+                Icon(painterResource(if (item.pinned) R.drawable.ic_gen_star_filled else R.drawable.ic_gen_star), tr("收藏", "Star"), Modifier.size(20.dp), tint = if (item.pinned) Accent else cs.onSurfaceVariant)
+            }
+            IconButton({ onAction(ItemAction.More, item) }) {
+                Icon(painterResource(R.drawable.ic_gen_more), tr("更多", "More"), Modifier.size(20.dp), tint = cs.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Box(
+            Modifier.fillMaxWidth().heightIn(min = 110.dp, max = 220.dp).clip(RoundedCornerShape(14.dp))
+                .background(cs.surfaceVariant).padding(14.dp).verticalScroll(rememberScrollState()),
+        ) {
+            SelectionContainer {
+                Text(
+                    if (item.hidden) tr("已隐藏的内容。验证身份后才能查看或复制。", "Hidden. Verify to view or copy it.")
+                    else item.preview,
+                    fontSize = 14.sp, lineHeight = 21.sp, color = if (item.hasLink) Accent else cs.onSurface,
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(recordMeta(ctx, item), fontSize = 11.5.sp, color = cs.onSurfaceVariant)
+        if (item.note != null) Text("✎ " + item.note, fontSize = 11.5.sp, color = Accent, modifier = Modifier.padding(top = 3.dp))
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button({ onAction(ItemAction.Copy, item) }, Modifier.weight(1f).height(44.dp), shape = RoundedCornerShape(12.dp)) {
+                Icon(painterResource(R.drawable.ic_gen_copy), null, Modifier.size(17.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(tr("复制", "Copy"), fontSize = 13.sp)
+            }
+            OutlinedButton({ onAction(ItemAction.View, item) }, Modifier.weight(1f).height(44.dp), shape = RoundedCornerShape(12.dp)) {
+                Text(tr("查看全文", "View all"), fontSize = 13.sp)
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        Text(tr("动作", "Actions"), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurfaceVariant)
+        Spacer(Modifier.height(6.dp))
+        val actions = listOf(
+            Triple(ItemAction.View, R.drawable.ic_gen_pick, tr("拆开挑选", "Pick part")),
+            Triple(ItemAction.Transform, R.drawable.ic_gen_transform, tr("变换", "Transform")),
+            Triple(ItemAction.Pin, if (item.pinned) R.drawable.ic_gen_star_filled else R.drawable.ic_gen_star, if (item.pinned) tr("取消收藏", "Unstar") else tr("收藏", "Star")),
+            Triple(ItemAction.Group, R.drawable.ic_gen_folder, tr("分组", "Group")),
+            Triple(ItemAction.Note, R.drawable.ic_gen_note, tr("备注", "Note")),
+            Triple(ItemAction.Hide, R.drawable.ic_gen_lock, if (item.hidden) tr("取消隐藏", "Unhide") else tr("隐藏", "Hide")),
+            Triple(ItemAction.Share, R.drawable.ic_gen_share, tr("分享", "Share")),
+            Triple(ItemAction.Edit, R.drawable.ic_gen_edit, tr("编辑", "Edit")),
+            Triple(ItemAction.Delete, R.drawable.ic_gen_trash, tr("删除", "Delete")),
         )
+        actions.chunked(3).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                row.forEach { (action, icon, label) ->
+                    ActionTile(icon, label, danger = action == ItemAction.Delete, modifier = Modifier.weight(1f)) {
+                        onAction(action, item)
+                    }
+                }
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+            Spacer(Modifier.height(6.dp))
+        }
+        Text(
+            tr("双击列表项直接复制；长按列表项或点“更多”打开动作轮。", "Double-click a row to copy; long-press a row or tap More for the action wheel."),
+            fontSize = 11.sp, lineHeight = 16.sp, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+@Composable
+private fun ActionTile(icon: Int, label: String, danger: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Column(
+        modifier.clip(RoundedCornerShape(10.dp))
+            .background(cs.surfaceVariant.copy(alpha = 0.55f))
+            .border(1.dp, cs.outlineVariant, RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick).padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(painterResource(icon), null, Modifier.size(17.dp), tint = if (danger) Danger else cs.onSurfaceVariant)
+        Spacer(Modifier.height(3.dp))
+        Text(label, fontSize = 10.5.sp, color = if (danger) Danger else cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/**
+ * 动作条：点选一条后出现，放“用这条内容”的动作（复制、拆开、变换、收藏、更多）。
+ * 浮在卡片上方，外面完全透明；颜色跟随浅色 / 深色主题。
+ */
+@Composable
+private fun GatheredDock(item: ClipItem, phone: Boolean, modifier: Modifier = Modifier, onAction: (ItemAction) -> Unit) {
+    val ctx = LocalContext.current
+    val cs = MaterialTheme.colorScheme
+    val light = cs.background.luminance() > 0.5f
+    val dockBg = if (light) Color(0xFFF3F4F7) else Color(0xFF2A2C32)
+    val divider = cs.outlineVariant
+    val shape = RoundedCornerShape(28.dp)
+    Box(modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 14.dp), contentAlignment = Alignment.Center) {
+        Row(
+            Modifier.shadow(10.dp, shape, ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f))
+                .clip(shape).background(dockBg).border(1.dp, divider, shape)
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                Modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).background(Accent)
+                    .clickable { onAction(ItemAction.Copy) }.padding(horizontal = 18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(painterResource(R.drawable.ic_gen_copy), null, Modifier.size(19.dp), tint = Color.White)
+                Spacer(Modifier.width(7.dp))
+                Text(tr("复制", "Copy"), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.width(4.dp))
+            if (!item.hidden) DockItem(R.drawable.ic_gen_pick, tr("拆开", "Pick"), cs.onSurface) { onAction(ItemAction.View) }
+            if (!item.hidden && Features.isOn(ctx, Feature.TRANSFORM)) { DockDivider(divider); DockItem(R.drawable.ic_gen_transform, tr("变换", "Transform"), cs.onSurface) { onAction(ItemAction.Transform) } }
+            if (!phone) {
+                DockDivider(divider)
+                DockItem(if (item.pinned) R.drawable.ic_gen_star_filled else R.drawable.ic_gen_star,
+                    if (item.pinned) tr("已收藏", "Starred") else tr("收藏", "Star"),
+                    cs.onSurface, tint = if (item.pinned) Accent else null) { onAction(ItemAction.Pin) }
+            }
+            DockDivider(divider)
+            DockItem(R.drawable.ic_gen_more, tr("更多", "More"), cs.onSurface) { onAction(ItemAction.More) }
+        }
+    }
+}
+
+@Composable
+private fun DockDivider(color: Color) {
+    Box(Modifier.padding(horizontal = 2.dp).width(1.dp).height(22.dp).background(color))
+}
+
+@Composable
+private fun DockItem(icon: Int, label: String, fg: Color, tint: Color? = null, onClick: () -> Unit) {
+    Row(
+        Modifier.height(44.dp).clip(RoundedCornerShape(22.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(painterResource(icon), label, Modifier.size(19.dp), tint = tint ?: fg.copy(alpha = 0.85f))
+        Spacer(Modifier.width(6.dp))
+        Text(label, fontSize = 14.sp, color = fg, maxLines = 1)
+    }
+}
+
+@Composable
+private fun EmptyRecords(loaded: Boolean, text: String) {
+    val cs = MaterialTheme.colorScheme
+    Column(
+        Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(painterResource(R.drawable.ic_empty), null, Modifier.size(72.dp), tint = cs.onSurfaceVariant.copy(alpha = 0.5f))
+        Spacer(Modifier.height(12.dp))
+        Text(if (!loaded) tr("正在读取记录…", "Loading…") else text, color = cs.onSurfaceVariant, fontSize = 14.sp, lineHeight = 21.sp)
+    }
+}
+
+@Composable
+private fun KeyHints() {
+    Text(
+        tr("↑↓ 选择 · Enter 复制 · → 查看全文 · Delete 删除 · 长按动作轮",
+            "↑↓ select · Enter copy · → view all · Delete delete · long-press for actions"),
+        fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+    )
+}
+
+/**
+ * 动作轮：长按一条时出现，放“整理这一条”的动作（收藏、分组、备注、隐藏、分享、删除），中间是复制。
+ * 和动作条分工：动作条管“用”，动作轮管“整理”，两边几乎不重复。
+ * 样式按 0.6.1 组件图：实心圆按钮 + 细描边，按钮之间用粗的浅色弧线（带轮廓）连起来。
+ */
+@Composable
+private fun ActionWheel(item: ClipItem, anchor: Rect?, onAction: (ItemAction) -> Unit, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    val cs = MaterialTheme.colorScheme
+    val light = cs.background.luminance() > 0.5f
+    val btnBg = if (light) Color.White else Color(0xFF2C2F36)
+    val ringFill = if (light) Color(0xFFE9ECF1) else Color(0xFF3A3E47)
+    val ringLine = if (light) Color(0xFFC9CED6) else Color(0xFF575C67)
+    val actions = buildList {
+        add(Triple(ItemAction.Pin, if (item.pinned) R.drawable.ic_gen_star_filled else R.drawable.ic_gen_star, if (item.pinned) tr("已收藏", "Starred") else tr("收藏", "Star")))
+        if (Features.isOn(ctx, Feature.GROUP)) add(Triple(ItemAction.Group, R.drawable.ic_gen_folder, tr("分组", "Group")))
+        if (Features.isOn(ctx, Feature.NOTE)) add(Triple(ItemAction.Note, R.drawable.ic_gen_note, tr("备注", "Note")))
+        if (Features.isOn(ctx, Feature.HIDE)) add(Triple(ItemAction.Hide, R.drawable.ic_gen_lock, if (item.hidden) tr("取消隐藏", "Unhide") else tr("隐藏", "Hide")))
+        if (!item.hidden) add(Triple(ItemAction.Edit, R.drawable.ic_gen_edit, tr("编辑", "Edit")))
+        add(Triple(ItemAction.Share, R.drawable.ic_gen_share, tr("分享", "Share")))
+        add(Triple(ItemAction.Delete, R.drawable.ic_gen_trash, tr("删除", "Delete")))
+    }.take(7)
+    val n = actions.size
+    val radius = 98f
+    val btn = 66.dp
+    val position = remember(anchor) {
+        object : PopupPositionProvider {
+            override fun calculatePosition(
+                anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize,
+            ): IntOffset {
+                val cx = anchor?.center?.x ?: (windowSize.width / 2f)
+                val cy = anchor?.center?.y ?: (windowSize.height / 2f)
+                val x = (cx - popupContentSize.width / 2f).roundToInt().coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
+                val y = (cy - popupContentSize.height / 2f).roundToInt().coerceIn(0, (windowSize.height - popupContentSize.height).coerceAtLeast(0))
+                return IntOffset(x, y)
+            }
+        }
+    }
+    Popup(
+        popupPositionProvider = position,
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = true, dismissOnBackPress = true, dismissOnClickOutside = true),
+    ) {
+        Box(Modifier.size(300.dp), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.size(300.dp)) {
+                // 一圈柔和的底色光晕：把轮盘和后面的卡片文字隔开，但不把整个屏幕压暗
+                drawCircle(
+                    brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                        0f to cs.background.copy(alpha = 0.94f), 0.72f to cs.background.copy(alpha = 0.88f), 1f to Color.Transparent,
+                        center = center, radius = size.minDimension / 2f,
+                    ),
+                    radius = size.minDimension / 2f,
+                )
+                val r = radius.dp.toPx()
+                val topLeft = Offset(center.x - r, center.y - r)
+                val arcSize = Size(r * 2, r * 2)
+                // 按钮占掉的角度（再留一点缝），弧线只画在按钮之间
+                val gap = (Math.toDegrees(kotlin.math.asin((btn.toPx() / 2f + 2.dp.toPx()) / r).toDouble()) * 2).toFloat()
+                val step = 360f / n
+                for (i in 0 until n) {
+                    val start = -90f + i * step + gap / 2f
+                    val sweep = step - gap
+                    if (sweep <= 0f) continue
+                    drawArc(ringLine, start, sweep, false, topLeft, arcSize, style = Stroke(15.dp.toPx(), cap = StrokeCap.Round))
+                    drawArc(ringFill, start, sweep, false, topLeft, arcSize, style = Stroke(12.dp.toPx(), cap = StrokeCap.Round))
+                }
+            }
+            // 中间：复制
+            Column(
+                Modifier.size(74.dp).shadow(8.dp, CircleShape).clip(CircleShape).background(Accent)
+                    .clickable { onAction(ItemAction.Copy); onDismiss() },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(painterResource(R.drawable.ic_gen_copy), null, Modifier.size(22.dp), tint = Color.White)
+                Text(tr("复制", "Copy"), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+            }
+            actions.forEachIndexed { i, (action, icon, label) ->
+                val angle = (-90f + i * 360f / n) * (PI.toFloat() / 180f)
+                val danger = action == ItemAction.Delete
+                val tint = when {
+                    danger -> Danger
+                    action == ItemAction.Pin && item.pinned -> Accent
+                    else -> cs.onSurface
+                }
+                Column(
+                    Modifier.offset(x = (cos(angle) * radius).dp, y = (sin(angle) * radius).dp)
+                        .size(btn).shadow(6.dp, CircleShape).clip(CircleShape).background(btnBg)
+                        .border(1.5.dp, ringLine, CircleShape)
+                        .clickable { onAction(action); onDismiss() }.padding(4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(painterResource(icon), label, Modifier.size(22.dp), tint = tint)
+                    Spacer(Modifier.height(2.dp))
+                    Text(label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = tint, maxLines = 1)
+                }
+            }
+        }
     }
 }
 
@@ -192,8 +829,8 @@ fun FavoritesPage() {
 
     Column(Modifier.fillMaxSize()) {
         PageHeader(tr("收藏", "Favorites"), query, { query = it }) {
-            HeaderIcon(R.drawable.ic_add, tr("新增常用语", "New phrase"), Accent) { adding = true }
-            if (groupOn) HeaderIcon(R.drawable.ic_tune, tr("管理分组", "Manage groups")) { managing = true }
+            HeaderIcon(R.drawable.ic_gen_add, tr("新增常用语", "New phrase"), Accent) { adding = true }
+            if (groupOn) HeaderIcon(R.drawable.ic_gen_gear, tr("管理分组", "Manage groups")) { managing = true }
         }
         ChipRow(chips, cur) { chip = it }
         ItemList(
@@ -272,6 +909,8 @@ private fun ItemList(
 private fun ItemCard(
     item: ClipItem, fv: Int, isCurrent: Boolean, picked: Boolean, selecting: Boolean,
     onClick: () -> Unit, onLongClick: () -> Unit, onMenu: () -> Unit, reorder: Pair<Boolean, Boolean>?,
+    onDoubleClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
 ) {
     val ctx = LocalContext.current
     val cs = MaterialTheme.colorScheme
@@ -279,15 +918,16 @@ private fun ItemCard(
     val sourceOn = remember(fv) { Features.isOn(ctx, Feature.SOURCE_APP) }
     val noteOn = remember(fv) { Features.isOn(ctx, Feature.NOTE) }
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-            .background(if (picked) Accent.copy(alpha = 0.12f) else cs.surface)
-            .border(if (isCurrent || picked) 1.5.dp else 1.dp, if (isCurrent || picked) Accent else cs.outlineVariant, RoundedCornerShape(14.dp))
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+        modifier.fillMaxWidth().shadow(if (picked) 8.dp else 0.dp, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(cs.surface)
+            .border(if (picked) 1.5.dp else 1.dp, if (picked) Accent else cs.outlineVariant, RoundedCornerShape(16.dp))
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick, onDoubleClick = onDoubleClick)
             .padding(start = 14.dp, end = 4.dp, top = 12.dp, bottom = 4.dp),
     ) {
         if (item.hidden) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(painterResource(R.drawable.ic_lock), null, Modifier.size(16.dp), tint = cs.onSurfaceVariant)
+                Icon(painterResource(R.drawable.ic_gen_lock), null, Modifier.size(16.dp), tint = cs.onSurfaceVariant)
                 Spacer(Modifier.width(6.dp))
                 Text(tr("已隐藏的内容 · 点按验证后复制", "Hidden · tap to verify and copy"), color = cs.onSurfaceVariant, fontSize = 14.sp)
             }
@@ -309,10 +949,10 @@ private fun ItemCard(
         }
         Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (picked) Text("✓ ", color = Accent, fontWeight = FontWeight.Bold)
+            if (picked && selecting) Text("✓ ", color = Accent, fontWeight = FontWeight.Bold)
             if (isCurrent) {
-                Text(tr("当前", "Current"), fontSize = 11.sp, color = Accent, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(Accent.copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 1.dp))
+                Text(tr("当前", "Current"), fontSize = 10.5.sp, color = cs.onSurfaceVariant,
+                    modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(cs.surfaceVariant).padding(horizontal = 6.dp, vertical = 1.dp))
                 Spacer(Modifier.width(6.dp))
             }
             val meta = buildList {
@@ -322,20 +962,20 @@ private fun ItemCard(
                 if (sourceOn && item.sourcePkg != null) add(AppInfo.label(ctx, item.sourcePkg))
                 if (item.expireAt != null) add(tr("将自动清除", "auto-removes"))
             }.joinToString(" · ")
-            Text(meta, fontSize = 11.sp, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(meta, fontSize = 11.sp, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!selecting) {
                 if (reorder != null) {
-                    if (reorder.first) SmallIcon(R.drawable.ic_up, tr("上移", "Move up"), cs.onSurfaceVariant) { ClipStore.movePhrase(item.id, -1) }
-                    if (reorder.second) SmallIcon(R.drawable.ic_down, tr("下移", "Move down"), cs.onSurfaceVariant) { ClipStore.movePhrase(item.id, 1) }
+                    if (reorder.first) SmallIcon(R.drawable.ic_gen_up, tr("上移", "Move up"), cs.onSurfaceVariant) { ClipStore.movePhrase(item.id, -1) }
+                    if (reorder.second) SmallIcon(R.drawable.ic_gen_down, tr("下移", "Move down"), cs.onSurfaceVariant) { ClipStore.movePhrase(item.id, 1) }
                 }
                 if (!item.phrase) SmallIcon(
-                    if (item.pinned) R.drawable.ic_star_filled else R.drawable.ic_star,
+                    if (item.pinned) R.drawable.ic_gen_star_filled else R.drawable.ic_gen_star,
                     if (item.pinned) tr("取消收藏", "Unstar") else tr("收藏", "Star"), if (item.pinned) Accent else cs.onSurfaceVariant,
                 ) { ClipStore.togglePin(item.id) }
                 if (kindOn && !item.hidden && Kinds.actionLabel(item.kind) != null) {
-                    SmallIcon(R.drawable.ic_open, Kinds.actionLabel(item.kind)!!, cs.onSurfaceVariant) { Kinds.run(ctx, item.kind, item.text) }
+                    SmallIcon(R.drawable.ic_gen_open, Kinds.actionLabel(item.kind)!!, cs.onSurfaceVariant) { Kinds.run(ctx, item.kind, item.text) }
                 }
-                SmallIcon(R.drawable.ic_more, tr("更多", "More"), cs.onSurfaceVariant, onMenu)
+                SmallIcon(R.drawable.ic_gen_more, tr("更多", "More"), cs.onSurfaceVariant, onMenu)
             }
         }
     }
@@ -416,6 +1056,33 @@ object Act {
     }
 }
 
+private class MenuRow(val icon: Int, val label: String, val danger: Boolean = false, val act: () -> Unit)
+
+@Composable
+private fun MenuSection(title: String, rows: List<MenuRow>) {
+    if (rows.isEmpty()) return
+    Text(title, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 20.dp, top = 8.dp, bottom = 2.dp))
+    rows.forEach { MenuRowView(it) }
+}
+
+@Composable
+private fun MenuRowView(r: MenuRow) {
+    val cs = MaterialTheme.colorScheme
+    val fg = if (r.danger) Danger else cs.onSurface
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 8.dp).clip(RoundedCornerShape(14.dp)).clickable(onClick = r.act)
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(if (r.danger) Danger.copy(alpha = 0.1f) else cs.surfaceVariant), contentAlignment = Alignment.Center) {
+            Icon(painterResource(r.icon), null, Modifier.size(18.dp), tint = if (r.danger) Danger else cs.onSurfaceVariant)
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(r.label, fontSize = 15.sp, color = fg)
+    }
+}
+
 private sealed interface MenuState {
     data object Menu : MenuState
     data class Viewer(val text: String) : MenuState
@@ -433,45 +1100,50 @@ private fun ItemMenu(item: ClipItem, onDismiss: () -> Unit) {
     fun on(f: Feature) = Features.isOn(ctx, f)
     when (val s = state) {
         MenuState.Menu -> {
-            val actions = buildList<Pair<String, () -> Unit>> {
-                add(tr("查看全文 / 选择一部分", "View / select part") to { Act.withText(ctx, item) { state = MenuState.Viewer(it) } })
-                add(tr("复制", "Copy") to { Act.copy(ctx, item); onDismiss() })
-                if (on(Feature.TRANSFORM)) add(tr("变换后复制…", "Transform and copy…") to { Act.withText(ctx, item) { state = MenuState.Transform(it) } })
-                add(tr("分享", "Share") to { Act.withText(ctx, item) { Act.share(ctx, it) }; onDismiss() })
-                add(tr("编辑", "Edit") to { Act.withText(ctx, item) { state = MenuState.Edit(it) } })
-                if (!item.phrase && !item.hidden) add(tr("加入常用语", "Add to phrases") to {
+            // 分两组：用这条内容 / 整理这一条；删除单独放最后
+            val use = buildList<MenuRow> {
+                add(MenuRow(R.drawable.ic_gen_pick, tr("查看全文 / 选择一部分", "View / select part")) { Act.withText(ctx, item) { state = MenuState.Viewer(it) } })
+                add(MenuRow(R.drawable.ic_gen_copy, tr("复制", "Copy")) { Act.copy(ctx, item); onDismiss() })
+                if (on(Feature.TRANSFORM)) add(MenuRow(R.drawable.ic_gen_transform, tr("变换后复制…", "Transform and copy…")) { Act.withText(ctx, item) { state = MenuState.Transform(it) } })
+                add(MenuRow(R.drawable.ic_gen_share, tr("分享", "Share")) { Act.withText(ctx, item) { Act.share(ctx, it) }; onDismiss() })
+            }
+            val organize = buildList<MenuRow> {
+                add(MenuRow(R.drawable.ic_gen_edit, tr("编辑", "Edit")) { Act.withText(ctx, item) { state = MenuState.Edit(it) } })
+                if (!item.phrase && !item.hidden) add(MenuRow(R.drawable.ic_gen_add, tr("加入常用语", "Add to phrases")) {
                     ctx.toast(if (ClipStore.addPhrase(item.text)) tr("已加入常用语", "Added to phrases") else tr("常用语里已有这条", "Already a phrase"))
                     onDismiss()
                 })
-                if (on(Feature.NOTE)) add((if (item.note == null) tr("加备注", "Add note") else tr("改备注", "Edit note")) to { state = MenuState.Note })
-                if (on(Feature.GROUP)) add(tr("移到分组…", "Move to group…") to { state = MenuState.Group })
-                if (on(Feature.SPLIT_MERGE) && !item.phrase && !item.hidden && item.text.contains('\n')) add(tr("按行拆分成多条", "Split into lines") to {
+                if (on(Feature.NOTE)) add(MenuRow(R.drawable.ic_gen_note, if (item.note == null) tr("加备注", "Add note") else tr("改备注", "Edit note")) { state = MenuState.Note })
+                if (on(Feature.GROUP)) add(MenuRow(R.drawable.ic_gen_folder, tr("移到分组…", "Move to group…")) { state = MenuState.Group })
+                if (on(Feature.SPLIT_MERGE) && !item.phrase && !item.hidden && item.text.contains('\n')) add(MenuRow(R.drawable.ic_gen_list, tr("按行拆分成多条", "Split into lines")) {
                     val n = ClipStore.split(item.id)
                     ctx.toast(if (n > 0) tr("拆成了 %d 条", "Split into %d items", n) else tr("不到两行，不用拆", "Fewer than two lines"))
                     onDismiss()
                 })
                 if (on(Feature.HIDE)) {
-                    if (item.hidden) add(tr("取消隐藏", "Unhide") to { Unlock.run(ctx) { if (!ClipStore.unhide(item.id)) ctx.toast(tr("这条内容解不开了", "Can't decrypt this item")) }; onDismiss() })
-                    else add(tr("隐藏", "Hide") to {
+                    if (item.hidden) add(MenuRow(R.drawable.ic_gen_lock, tr("取消隐藏", "Unhide")) { Unlock.run(ctx) { if (!ClipStore.unhide(item.id)) ctx.toast(tr("这条内容解不开了", "Can't decrypt this item")) }; onDismiss() })
+                    else add(MenuRow(R.drawable.ic_gen_lock, tr("隐藏", "Hide")) {
                         ctx.toast(if (ClipStore.hide(item.id)) tr("已隐藏", "Hidden") else tr("这条不能隐藏（太长，或这台设备不支持加密）", "Can't hide this (too long, or encryption unavailable)"))
                         onDismiss()
                     })
                 }
-                add(tr("删除", "Delete") to { ClipStore.delete(item.id); Undo.offer(ctx, listOf(item.id)); onDismiss() })
             }
+            val delete = MenuRow(R.drawable.ic_gen_trash, tr("删除", "Delete"), danger = true) { ClipStore.delete(item.id); Undo.offer(ctx, listOf(item.id)); onDismiss() }
+            val cs = MaterialTheme.colorScheme
             Dialog(onDismissRequest = onDismiss) {
-                Column(Modifier.clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surface).padding(vertical = 8.dp).widthIn(min = 260.dp)) {
+                Column(
+                    Modifier.widthIn(min = 300.dp, max = 400.dp).clip(RoundedCornerShape(24.dp)).background(cs.surface)
+                        .verticalScroll(rememberScrollState()).padding(vertical = 10.dp),
+                ) {
                     Text(
-                        if (item.hidden) tr("已隐藏的内容", "Hidden item") else item.preview.take(60),
-                        maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                        if (item.hidden) tr("已隐藏的内容", "Hidden item") else item.preview.take(80),
+                        maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 13.sp, lineHeight = 19.sp, color = cs.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                     )
-                    actions.forEach { (label, act) ->
-                        Text(
-                            label, fontSize = 15.sp, color = if (label == tr("删除", "Delete")) Danger else MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.fillMaxWidth().clickable(onClick = act).padding(horizontal = 20.dp, vertical = 13.dp),
-                        )
-                    }
+                    MenuSection(tr("使用", "Use"), use)
+                    MenuSection(tr("整理", "Organize"), organize)
+                    Box(Modifier.padding(horizontal = 20.dp, vertical = 4.dp).fillMaxWidth().height(1.dp).background(cs.outlineVariant))
+                    MenuRowView(delete)
                 }
             }
         }
@@ -565,10 +1237,10 @@ private fun GroupManagerDialog(onDismiss: () -> Unit) {
                     val i = groups.indexOf(g)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(g.name, Modifier.weight(1f).padding(start = 4.dp), fontSize = 15.sp)
-                        if (i > 0) SmallIcon(R.drawable.ic_up, tr("上移", "Up"), MaterialTheme.colorScheme.onSurfaceVariant) { ClipStore.moveGroup(g.id, -1) }
-                        if (i < groups.lastIndex) SmallIcon(R.drawable.ic_down, tr("下移", "Down"), MaterialTheme.colorScheme.onSurfaceVariant) { ClipStore.moveGroup(g.id, 1) }
-                        SmallIcon(R.drawable.ic_edit, tr("改名", "Rename"), MaterialTheme.colorScheme.onSurfaceVariant) { renaming = g.id }
-                        SmallIcon(R.drawable.ic_delete, tr("删除", "Delete"), MaterialTheme.colorScheme.onSurfaceVariant) { deleting = g.id }
+                        if (i > 0) SmallIcon(R.drawable.ic_gen_up, tr("上移", "Up"), MaterialTheme.colorScheme.onSurfaceVariant) { ClipStore.moveGroup(g.id, -1) }
+                        if (i < groups.lastIndex) SmallIcon(R.drawable.ic_gen_down, tr("下移", "Down"), MaterialTheme.colorScheme.onSurfaceVariant) { ClipStore.moveGroup(g.id, 1) }
+                        SmallIcon(R.drawable.ic_gen_edit, tr("改名", "Rename"), MaterialTheme.colorScheme.onSurfaceVariant) { renaming = g.id }
+                        SmallIcon(R.drawable.ic_gen_trash, tr("删除", "Delete"), MaterialTheme.colorScheme.onSurfaceVariant) { deleting = g.id }
                     }
                 }
             }
@@ -596,37 +1268,5 @@ private fun GroupManagerDialog(onDismiss: () -> Unit) {
             confirmButton = { TextButton({ ClipStore.deleteGroup(id); deleting = null }) { Text(tr("删除", "Delete"), color = Danger) } },
             dismissButton = { TextButton({ deleting = null }) { Text(tr("取消", "Cancel")) } },
         )
-    }
-}
-
-/** 粘贴前变换：选一种，预览结果，复制 */
-@Composable
-private fun TransformDialog(text: String, onDismiss: () -> Unit) {
-    val ctx = LocalContext.current
-    var chosen by remember { mutableStateOf<Transform?>(null) }
-    val result = remember(chosen) { chosen?.let { runCatching { TextTransforms.apply(it, text) }.getOrDefault(text) } }
-    Dialog(onDismissRequest = onDismiss) {
-        Column(Modifier.clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surface).padding(16.dp).heightIn(max = 600.dp)) {
-            Text(tr("变换后复制", "Transform and copy"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(4.dp))
-            if (result == null) {
-                LazyColumn(Modifier.weight(1f, fill = false)) {
-                    items(Transform.entries.toList()) { t ->
-                        Text(t.label, fontSize = 15.sp, modifier = Modifier.fillMaxWidth().clickable { chosen = t }.padding(horizontal = 8.dp, vertical = 11.dp))
-                    }
-                }
-            } else {
-                Text(chosen!!.label, color = Accent, fontSize = 13.sp, modifier = Modifier.padding(4.dp))
-                Box(Modifier.weight(1f, fill = false).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
-                    .verticalScroll(rememberScrollState()).padding(12.dp)) {
-                    SelectionContainer { Text(result.ifEmpty { tr("（结果是空的）", "(empty result)") }.take(20_000), fontSize = 14.sp, lineHeight = 21.sp) }
-                }
-                Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
-                    TextButton({ chosen = null }) { Text(tr("换一种", "Back")) }
-                    TextButton({ ClipStore.add(result, Prefs(ctx).maxItems, fromClipboard = false); ctx.toast(tr("已存为新的一条", "Saved as a new item")); onDismiss() },
-                        enabled = result.isNotBlank()) { Text(tr("存为一条", "Save")) }
-                    Button({ ClipReader.write(ctx, result); ctx.toast(tr("已复制", "Copied")); onDismiss() }, enabled = result.isNotEmpty()) { Text(tr("复制", "Copy")) }
-                }
-            }
-        }
     }
 }

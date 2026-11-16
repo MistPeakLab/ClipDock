@@ -190,9 +190,9 @@ private fun Sidebar(tab: Tab, tick: Int, modifier: Modifier, onOpen: (Sub) -> Un
                 Text(tr("悬浮剪贴板", "Floating clipboard"), fontSize = 11.sp, color = cs.onSurfaceVariant)
             }
         }
-        NavItem(R.drawable.ic_history, tr("记录", "History"), tab == Tab.Records, counts.first.toString()) { onSelect(Tab.Records) }
-        NavItem(R.drawable.ic_star, tr("收藏", "Favorites"), tab == Tab.Favorites, counts.second.toString()) { onSelect(Tab.Favorites) }
-        NavItem(R.drawable.ic_person, tr("我的", "Me"), tab == Tab.Me, null) { onSelect(Tab.Me) }
+        NavItem(R.drawable.ic_gen_history, tr("记录", "History"), tab == Tab.Records, counts.first.toString()) { onSelect(Tab.Records) }
+        NavItem(R.drawable.ic_gen_star, tr("收藏", "Favorites"), tab == Tab.Favorites, counts.second.toString()) { onSelect(Tab.Favorites) }
+        NavItem(R.drawable.ic_gen_person, tr("我的", "Me"), tab == Tab.Me, null) { onSelect(Tab.Me) }
         Spacer(Modifier.weight(1f))
         val level = remember(tick) { abilityLevel(ctx) }
         ModeBadge(level) { onOpen(Sub.Permissions) }
@@ -221,9 +221,9 @@ private fun BottomBar(tab: Tab, onSelect: (Tab) -> Unit) {
     // 外层已经让出了系统栏的位置，这里不要再让一次
     NavigationBar(windowInsets = WindowInsets(0)) {
         listOf(
-            Triple(Tab.Records, R.drawable.ic_history, tr("记录", "History")),
-            Triple(Tab.Favorites, R.drawable.ic_star, tr("收藏", "Favorites")),
-            Triple(Tab.Me, R.drawable.ic_person, tr("我的", "Me")),
+            Triple(Tab.Records, R.drawable.ic_gen_history, tr("记录", "History")),
+            Triple(Tab.Favorites, R.drawable.ic_gen_star, tr("收藏", "Favorites")),
+            Triple(Tab.Me, R.drawable.ic_gen_person, tr("我的", "Me")),
         ).forEach { (t, icon, label) ->
             NavigationBarItem(
                 selected = tab == t, onClick = { onSelect(t) },
@@ -309,7 +309,7 @@ fun PageHeader(title: String, query: String? = null, onQuery: (String) -> Unit =
                     .background(cs.surface).border(1.dp, cs.outlineVariant, RoundedCornerShape(21.dp)).padding(start = 14.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(painterResource(R.drawable.ic_search), null, Modifier.size(18.dp), tint = cs.onSurfaceVariant)
+                Icon(painterResource(R.drawable.ic_gen_search), null, Modifier.size(18.dp), tint = cs.onSurfaceVariant)
                 Spacer(Modifier.width(8.dp))
                 Box(Modifier.weight(1f)) {
                     if (query.isEmpty()) Text(tr("搜索（支持拼音首字母）", "Search"), color = cs.onSurfaceVariant, fontSize = 14.sp)
@@ -317,7 +317,7 @@ fun PageHeader(title: String, query: String? = null, onQuery: (String) -> Unit =
                         textStyle = MaterialTheme.typography.bodyMedium.copy(color = cs.onSurface, fontSize = 14.sp),
                         modifier = Modifier.fillMaxWidth())
                 }
-                if (query.isNotEmpty()) SmallIcon(R.drawable.ic_close, tr("清空", "Clear"), cs.onSurfaceVariant) { onQuery("") }
+                if (query.isNotEmpty()) SmallIcon(R.drawable.ic_gen_close, tr("清空", "Clear"), cs.onSurfaceVariant) { onQuery("") }
             }
         }
     }

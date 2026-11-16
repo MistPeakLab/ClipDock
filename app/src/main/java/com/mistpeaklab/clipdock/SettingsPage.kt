@@ -20,6 +20,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -60,19 +61,19 @@ fun MePage(tick: Int, open: (Sub) -> Unit) {
                 2 -> tr("增强模式：后台记录、快捷键唤起", "Enhanced: background recording, hotkey")
                 1 -> tr("基础模式：悬浮面板，打开时记录", "Basic: floating panel, records when opened")
                 else -> tr("仅主界面：打开随贴时记录", "App only: records when ClipDock is opened")
-            }, if (level == 2) null else "!") { open(Sub.Permissions) }
-            Entry(tr("唤起与面板", "Hotkey & panel"), tr("快捷键、关闭方式、面板大小", "Hotkey, how the panel closes, size")) { open(Sub.Panel) }
-            Entry(tr("粘贴", "Pasting"), tr("直接粘贴、清理格式、多条合并", "Paste directly, clean up, merging")) { open(Sub.Paste) }
-            Entry(tr("记录", "History"), tr("保留条数、补漏检测、清空", "How many to keep, catch-up checks, clear")) { open(Sub.Record) }
+            }, if (level == 2) null else "!", icon = R.drawable.ic_gen_shield) { open(Sub.Permissions) }
+            Entry(tr("唤起与面板", "Hotkey & panel"), tr("快捷键、关闭方式、面板大小", "Hotkey, how the panel closes, size"), icon = R.drawable.ic_gen_keyboard) { open(Sub.Panel) }
+            Entry(tr("粘贴", "Pasting"), tr("直接粘贴、清理格式、多条合并", "Paste directly, clean up, merging"), icon = R.drawable.ic_gen_copy) { open(Sub.Paste) }
+            Entry(tr("记录", "History"), tr("保留条数、补漏检测、清空", "How many to keep, catch-up checks, clear"), icon = R.drawable.ic_gen_history) { open(Sub.Record) }
         }
         Group(tr("数据与安全", "Data & security")) {
-            Entry(tr("隐私", "Privacy"), tr("隐藏内容、不记录的应用、验证码", "Hidden items, apps to skip, codes")) { open(Sub.Privacy) }
-            Entry(tr("备份与导入导出", "Backup & export"), tr("导出、导入、自动备份", "Export, import, automatic backup")) { open(Sub.Backup) }
-            if (Features.isOn(ctx, Feature.TRASH)) Entry(tr("回收站", "Trash"), tr("删除的内容保留 %d 天", "Deleted items are kept for %d days", ItemRepo.TRASH_DAYS)) { open(Sub.Trash) }
-            Entry(tr("收录诊断", "Diagnostics"), tr("复制了却没记下来？看这里", "Copied but not recorded? Look here")) { open(Sub.Diag) }
+            Entry(tr("隐私", "Privacy"), tr("隐藏内容、不记录的应用、验证码", "Hidden items, apps to skip, codes"), icon = R.drawable.ic_gen_lock) { open(Sub.Privacy) }
+            Entry(tr("备份与导入导出", "Backup & export"), tr("导出、导入、自动备份", "Export, import, automatic backup"), icon = R.drawable.ic_gen_download) { open(Sub.Backup) }
+            if (Features.isOn(ctx, Feature.TRASH)) Entry(tr("回收站", "Trash"), tr("删除的内容保留 %d 天", "Deleted items are kept for %d days", ItemRepo.TRASH_DAYS), icon = R.drawable.ic_gen_trash) { open(Sub.Trash) }
+            Entry(tr("收录诊断", "Diagnostics"), tr("复制了却没记下来？看这里", "Copied but not recorded? Look here"), icon = R.drawable.ic_gen_gear) { open(Sub.Diag) }
         }
         Group(tr("其他", "Other")) {
-            Entry(tr("外观与语言", "Look & language"), tr("主题、界面语言", "Theme, language")) { open(Sub.Look) }
+            Entry(tr("外观与语言", "Look & language"), tr("主题、界面语言", "Theme, language"), icon = R.drawable.ic_gen_palette) { open(Sub.Look) }
         }
         Text(
             tr("随贴 ClipDock %s · MIT 开源 · 本地存储，不联网", "ClipDock %s · MIT licensed · stored on this device, never online",
@@ -359,10 +360,14 @@ private fun HotkeyDialog(onDismiss: () -> Unit, onSet: (Hotkey) -> Unit) {
 fun Group(title: String, content: @Composable ColumnScope.() -> Unit) {
     val cs = MaterialTheme.colorScheme
     Column {
-        Text(title, fontSize = 13.sp, color = Accent, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp, bottom = 6.dp, top = 4.dp))
+        Row(Modifier.padding(start = 6.dp, bottom = 7.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(5.dp).clip(RoundedCornerShape(50)).background(Accent))
+            Spacer(Modifier.width(7.dp))
+            Text(title, fontSize = 12.sp, color = cs.onSurfaceVariant, fontWeight = FontWeight.SemiBold, letterSpacing = 0.3.sp)
+        }
         Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(cs.surface)
-                .border(1.dp, cs.outlineVariant, RoundedCornerShape(14.dp)).padding(vertical = 4.dp),
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(cs.surface)
+                .border(1.dp, cs.outlineVariant, RoundedCornerShape(18.dp)).padding(vertical = 4.dp),
             content = content,
         )
     }
@@ -397,11 +402,30 @@ fun Clickable(title: String, sub: String?, value: String, onClick: () -> Unit) =
 
 /** 进入下一级页面的一行；badge 为 "!" 时显示成提醒色 */
 @Composable
-fun Entry(title: String, sub: String?, badge: String? = null, onClick: () -> Unit) =
-    RowBase(title, sub, onClick) {
+fun Entry(title: String, sub: String?, badge: String? = null, icon: Int? = null, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Box(
+                Modifier.size(34.dp).clip(RoundedCornerShape(11.dp)).background(Accent.copy(alpha = 0.10f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(painterResource(icon), null, Modifier.size(17.dp), tint = Accent)
+            }
+            Spacer(Modifier.width(12.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp, color = cs.onSurface)
+            if (sub != null) Text(sub, fontSize = 12.sp, color = cs.onSurfaceVariant, lineHeight = 17.sp)
+        }
+        Spacer(Modifier.width(12.dp))
         if (badge != null) Text(badge, color = Warn, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp))
-        Text("›", fontSize = 20.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("›", fontSize = 20.sp, color = cs.onSurfaceVariant)
     }
+}
 
 /** 几选一。选项放得下就排在标题右边；放不下（手机竖屏、选项多）就另起一行，可以左右滑 */
 @Composable

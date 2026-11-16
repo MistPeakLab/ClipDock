@@ -22,8 +22,8 @@ android {
         applicationId = "com.mistpeaklab.clipdock"
         minSdk = 34
         targetSdk = 36
-        versionCode = 9
-        versionName = "0.6.0"
+        versionCode = 10
+        versionName = "0.6.1"
     }
 
     signingConfigs {
@@ -54,6 +54,11 @@ android {
                 // Robolectric 运行时要下载一份安卓框架，走国内镜像
                 it.systemProperty("robolectric.dependency.repo.url", "https://maven.aliyun.com/repository/public")
                 it.systemProperty("robolectric.dependency.repo.id", "aliyun")
+                // 界面截图（ScreenshotTest）只在 -Pshots 时运行，输出到 app/build/shots/
+                if (project.hasProperty("shots")) {
+                    it.systemProperty("shots.dir", layout.buildDirectory.dir("shots").get().asFile.absolutePath)
+                    it.outputs.upToDateWhen { false }
+                }
             }
         }
     }
@@ -79,4 +84,8 @@ dependencies {
     // 只在测试时用，不会进安装包
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
+    // 电脑上截图（ScreenshotTest）：模拟点击、长按
+    testImplementation(bom)
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

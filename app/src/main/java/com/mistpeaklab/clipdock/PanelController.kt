@@ -103,8 +103,8 @@ class PanelController(
     /** 正在选“粘贴前变换”：要变换的文字 */
     private var transformFor: String? = null
     private var shown = false
-    private var wDp = prefs.panelW
-    private var hDp = prefs.panelH
+    private var wDp = if (phone) prefs.panelPhoneW else prefs.panelW
+    private var hDp = if (phone) prefs.panelPhoneH else prefs.panelH
     private val listener: () -> Unit = { root.post { if (transformFor == null) refresh() } }
 
     private val dm get() = ctx.resources.displayMetrics
@@ -112,7 +112,10 @@ class PanelController(
     private fun dp(v: Int) = dp(v.toFloat())
     private fun toDp(px: Int) = (px / dm.density).toInt()
 
-    /** 手机竖屏：面板做成贴底的抽屉，手指更好够到 */
+    /**
+     * 手机竖屏：默认出现在屏幕下半部、几乎铺满宽度，手指好够到；
+     * 和平板一样可以拖顶部把手移动、拖右下角缩放，位置和大小单独记一套。
+     */
     private val phone get() = toDp(dm.widthPixels) < 600
 
     private fun on(f: Feature) = Features.isOn(ctx, f)
@@ -153,20 +156,24 @@ class PanelController(
 
         panel = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            background = if (phone) GradientDrawable().apply {
-                setColor(cBg)
-                val r = dp(18).toFloat()
-                cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
-            } else round(cBg, dp(16).toFloat(), cBorder)
+            background = round(cBg, dp(18).toFloat(), cBorder)
             elevation = dp(8).toFloat()
             setPadding(dp(8), dp(4), dp(8), dp(8))
             clipToOutline = true
         }
         root.addView(panel, FrameLayout.LayoutParams(dp(wDp), dp(hDp)).apply {
-            if (phone) setMargins(0, dp(shadow), 0, 0) else setMargins(dp(shadow), dp(shadow), dp(shadow), dp(shadow))
+            setMargins(dp(shadow), dp(shadow), dp(shadow), dp(shadow))
         })
 
-        // 标题栏：拖动移动（手机上拖动调高度）
+        // 顶部把手：明确告诉用户“这里可以拖”。标题栏里有可横向滑动的标签，手指按在标签上会被滑动吃掉，所以单独留一条
+        val handle = FrameLayout(ctx).apply {
+            addView(View(ctx).apply { background = round(cSub and 0x00FFFFFF or 0x66000000, dp(2).toFloat()) },
+                FrameLayout.LayoutParams(dp(36), dp(4), Gravity.CENTER))
+        }
+        panel.addView(handle, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(if (phone) 18 else 12)))
+        enableDrag(handle)
+
+        // 标题栏：拖动移动
         val header = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -185,12 +192,12 @@ class PanelController(
             setOnClickListener { toggleCollect() }
         }
         if (on(Feature.COLLECT)) header.addView(collectBtn, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(2) })
-        header.addView(iconButton(R.drawable.ic_clear, tr("清空（保留收藏）", "Clear (keeps favourites)")) { ClipStore.clearUnpinned() })
-        header.addView(iconButton(R.drawable.ic_clip, tr("打开主界面", "Open ClipDock")) {
+        header.addView(iconButton(R.drawable.ic_gen_trash, tr("清空（保留收藏）", "Clear (keeps favourites)")) { ClipStore.clearUnpinned() })
+        header.addView(iconButton(R.drawable.ic_gen_open, tr("打开主界面", "Open ClipDock")) {
             dismiss()
             ctx.startActivity(Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         })
-        header.addView(iconButton(R.drawable.ic_close, tr("关闭", "Close")) { dismiss() })
+        header.addView(iconButton(R.drawable.ic_gen_close, tr("关闭", "Close")) { dismiss() })
         panel.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)))
         enableDrag(header)
 
@@ -243,33 +250,27 @@ class PanelController(
             addView(selBar)
         }
         panel.addView(selWrap, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            topMargin = dp(6); marginEnd = if (phone) 0 else dp(18)
+            topMargin = dp(6); marginEnd = dp(if (phone) 30 else 18)
         })
 
         buildPickBox()
-        if (!phone) {
-            val grip = ResizeGrip(ctx, cSub)
-            root.addView(grip, FrameLayout.LayoutParams(dp(28), dp(28), Gravity.BOTTOM or Gravity.END).apply {
-                setMargins(0, 0, dp(shadow), dp(shadow))
-            })
-            enableResize(grip)
-        }
+        val grip = ResizeGrip(ctx, cSub)
+        root.addView(grip, FrameLayout.LayoutParams(dp(if (phone) 36 else 28), dp(if (phone) 36 else 28), Gravity.BOTTOM or Gravity.END).apply {
+            setMargins(0, 0, dp(shadow), dp(shadow))
+        })
+        enableResize(grip)
 
         lp = WindowManager.LayoutParams(
-            if (phone) dp(wDp) else dp(wDp + shadow * 2), if (phone) dp(hDp + shadow) else dp(hDp + shadow * 2),
+            dp(wDp + shadow * 2), dp(hDp + shadow * 2),
             windowType, baseFlags(), PixelFormat.TRANSLUCENT,
         ).apply {
-            if (phone) {
-                gravity = Gravity.BOTTOM or Gravity.START
-                x = 0; y = 0
-                softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
-            } else {
-                gravity = Gravity.TOP or Gravity.START
-                val sx = prefs.panelX; val sy = prefs.panelY
-                x = if (sx >= 0) sx else (dm.widthPixels - width) / 2
-                y = if (sy >= 0) sy else (dm.heightPixels - height) / 2
-                softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
-            }
+            gravity = Gravity.TOP or Gravity.START
+            val sx = if (phone) prefs.panelPhoneX else prefs.panelX
+            val sy = if (phone) prefs.panelPhoneY else prefs.panelY
+            x = if (sx >= 0) sx else (dm.widthPixels - width) / 2
+            // 手机默认贴近底部（留出导航栏），平板默认居中
+            y = if (sy >= 0) sy else if (phone) dm.heightPixels - height - dp(56) else (dm.heightPixels - height) / 2
+            softInputMode = if (phone) WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN else WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
             windowAnimations = android.R.style.Animation_Dialog
         }
         clampPos()
@@ -482,13 +483,13 @@ class PanelController(
         row.addView(textCol, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
         if (!item.hidden && item.preview.length >= 12) {
-            row.addView(iconButton(R.drawable.ic_cut, tr("拆开挑选（→）", "Pick part (→)"), small = true) { selected = index; openPicker(item) })
+            row.addView(iconButton(R.drawable.ic_gen_pick, tr("拆开挑选（→）", "Pick part (→)"), small = true) { selected = index; openPicker(item) })
         }
         if (!item.phrase) {
-            row.addView(iconButton(if (item.pinned) R.drawable.ic_star_filled else R.drawable.ic_star,
+            row.addView(iconButton(if (item.pinned) R.drawable.ic_gen_star_filled else R.drawable.ic_gen_star,
                 if (item.pinned) tr("取消收藏", "Unstar") else tr("收藏", "Star"), small = true,
                 tint = if (item.pinned) cAccent else cSub) { ClipStore.togglePin(item.id) })
-            row.addView(iconButton(R.drawable.ic_delete, tr("删除", "Delete"), small = true) { deleteWithUndo(listOf(item.id)) })
+            row.addView(iconButton(R.drawable.ic_gen_trash, tr("删除", "Delete"), small = true) { deleteWithUndo(listOf(item.id)) })
         } else {
             row.addView(View(ctx), LinearLayout.LayoutParams(dp(8), 1))
         }
@@ -759,7 +760,7 @@ class PanelController(
         bottom.addView(pickLabel, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         bottom.addView(pillButton(tr("复制", "Copy"), false) { actPiece(MODE_COPY) })
         bottom.addView(pillButton(tr("粘贴", "Paste"), true) { actPiece(MODE_PASTE) })
-        pickBox.addView(bottom, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = if (phone) 0 else dp(18) })
+        pickBox.addView(bottom, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(if (phone) 30 else 18) })
         panel.addView(pickBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
     }
 
@@ -849,10 +850,9 @@ class PanelController(
 
     private fun clampSize() {
         if (phone) {
-            // 手机：铺满宽度，高度在屏幕的 35%–90% 之间
-            wDp = toDp(dm.widthPixels)
-            hDp = hDp.coerceIn(toDp((dm.heightPixels * 0.35f).toInt()), toDp((dm.heightPixels * 0.9f).toInt()))
-            return
+            // 手机：没设置过就几乎铺满宽度、占屏幕一半多一点高
+            if (wDp <= 0) wDp = toDp(dm.widthPixels) - shadow * 2 - 8
+            if (hDp <= 0) hDp = toDp((dm.heightPixels * 0.55f).toInt())
         }
         val maxW = toDp(dm.widthPixels) - shadow * 2
         val maxH = toDp(dm.heightPixels) - shadow * 2
@@ -861,34 +861,26 @@ class PanelController(
     }
 
     private fun clampPos() {
-        if (phone) return
         lp.x = lp.x.coerceIn(0, max(0, dm.widthPixels - lp.width))
         lp.y = lp.y.coerceIn(0, max(0, dm.heightPixels - lp.height))
     }
 
     @SuppressLint("ClickableViewAccessibility")
     private fun enableDrag(handle: View) {
-        var dx0 = 0f; var dy0 = 0f; var x0 = 0; var y0 = 0; var h0 = 0; var dragging = false
+        var dx0 = 0f; var dy0 = 0f; var x0 = 0; var y0 = 0; var dragging = false
         handle.setOnTouchListener { _, ev ->
             when (ev.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { dx0 = ev.rawX; dy0 = ev.rawY; x0 = lp.x; y0 = lp.y; h0 = hDp; dragging = false }
+                MotionEvent.ACTION_DOWN -> { dx0 = ev.rawX; dy0 = ev.rawY; x0 = lp.x; y0 = lp.y; dragging = false }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = ev.rawX - dx0; val dy = ev.rawY - dy0
                     if (!dragging && (abs(dx) > dp(4) || abs(dy) > dp(4))) dragging = true
                     if (dragging) {
-                        if (phone) {
-                            // 往上拖变高，往下拖变矮
-                            hDp = (h0 - toDp(dy.toInt())).coerceIn(toDp((dm.heightPixels * 0.35f).toInt()), toDp((dm.heightPixels * 0.9f).toInt()))
-                            (panel.layoutParams as FrameLayout.LayoutParams).height = dp(hDp)
-                            lp.height = dp(hDp + shadow)
-                        } else {
-                            lp.x = x0 + dx.toInt(); lp.y = y0 + dy.toInt(); clampPos()
-                        }
+                        lp.x = x0 + dx.toInt(); lp.y = y0 + dy.toInt(); clampPos()
                         runCatching { wm.updateViewLayout(root, lp) }
                     }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (dragging) {
-                    if (phone) prefs.panelH = hDp else { prefs.panelX = lp.x; prefs.panelY = lp.y }
+                    if (phone) { prefs.panelPhoneX = lp.x; prefs.panelPhoneY = lp.y } else { prefs.panelX = lp.x; prefs.panelY = lp.y }
                 }
             }
             true
@@ -908,7 +900,9 @@ class PanelController(
                     lp.width = dp(wDp + shadow * 2); lp.height = dp(hDp + shadow * 2)
                     runCatching { wm.updateViewLayout(root, lp) }
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { prefs.panelW = wDp; prefs.panelH = hDp }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (phone) { prefs.panelPhoneW = wDp; prefs.panelPhoneH = hDp } else { prefs.panelW = wDp; prefs.panelH = hDp }
+                }
             }
             true
         }
