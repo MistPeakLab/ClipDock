@@ -317,4 +317,34 @@ class SearchTest {
         assertEquals("%a\\_b%", Search.likePattern("a_b"))
         assertEquals("%c:\\\\x%", Search.likePattern("c:\\x"))
     }
-}
+
+    // ---------- highlight（面板里标出命中的字） ----------
+
+    private val fakeSeg: (String) -> List<String>? = { s ->
+        if (s.none { it in dict }) null else s.map { dict[it] ?: it.toString() }
+    }
+
+    private fun hl(text: String, q: String, pinyin: Boolean = true): List<String> {
+        val saved = Search.segments
+        Search.segments = fakeSeg
+        try { return Search.highlight(text, Search.terms(q), pinyin).map { text.substring(it.first, it.last + 1) } }
+        finally { Search.segments = saved }
+    }
+
+    @Test fun highlightDirectIgnoresCase() = assertEquals(listOf("Review", "review"), hl("Review: please review", "REVIEW"))
+
+    @Test fun highlightFullWidth() = assertEquals(listOf("ＡＢ"), hl("xＡＢy", "ab"))
+
+    @Test fun highlightPinyinFull() = assertEquals(listOf("快递"), hl("【快递通知】您好", "kuaidi"))
+
+    @Test fun highlightPinyinPartialSyllable() = assertEquals(listOf("快递"), hl("快递通知", "kuaid"))
+
+    @Test fun highlightInitials() = assertEquals(listOf("通知"), hl("快递通知", "tz"))
+
+    @Test fun highlightPinyinOffWhenDisabled() = assertEquals(emptyList<String>(), hl("快递通知", "kuaidi", pinyin = false))
+
+    @Test fun highlightMergesAdjacent() = assertEquals(listOf("快递通知"), hl("快递通知", "快递 通知"))
+
+    @Test fun highlightMixedAsciiAndHan() = assertEquals(listOf("wx群"), hl("加wx群", "wxqun"))
+
+    @Test fun highlightNothing() = assertEquals(emptyList<String>(), hl("快递通知", "zzz"))}

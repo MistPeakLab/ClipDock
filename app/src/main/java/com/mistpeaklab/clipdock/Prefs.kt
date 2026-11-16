@@ -109,17 +109,18 @@ class Prefs(context: Context) {
     var panelY by int("panel_y", -1)
 
     fun resetPanelPosition() = sp.edit().remove("panel_x").remove("panel_y").remove("panel_w").remove("panel_h")
-        .remove("panel_px").remove("panel_py").remove("panel_pw").remove("panel_ph").apply()
+        .remove("panel_px2").remove("panel_py2").remove("panel_pw2").remove("panel_ph2").apply()
 
     // 面板尺寸（dp）
-    var panelW by int("panel_w", 340)
-    var panelH by int("panel_h", 420)
+    var panelW by int("panel_w", 420)
+    var panelH by int("panel_h", 560)
 
-    // 手机竖屏（宽度 < 600dp）单独记一套位置和大小，和平板 / 横屏互不覆盖。-1 表示用默认
-    var panelPhoneX by int("panel_px", -1)
-    var panelPhoneY by int("panel_py", -1)
-    var panelPhoneW by int("panel_pw", -1)
-    var panelPhoneH by int("panel_ph", -1)
+    // 手机竖屏（宽度 < 600dp）单独记一套位置和大小，和平板 / 横屏互不覆盖。-1 表示用默认。
+    // 0.6.2 起手机上也是悬浮小窗（以前默认贴底占半屏），换了键名，旧的半屏尺寸不再沿用
+    var panelPhoneX by int("panel_px2", -1)
+    var panelPhoneY by int("panel_py2", -1)
+    var panelPhoneW by int("panel_pw2", -1)
+    var panelPhoneH by int("panel_ph2", -1)
 
     /** 面板每条最多显示几行 */
     var previewLines by int("preview_lines", 2)

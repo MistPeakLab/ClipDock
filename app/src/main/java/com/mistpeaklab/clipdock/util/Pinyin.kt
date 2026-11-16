@@ -72,6 +72,30 @@ object Pinyin {
         return if (ok) full.toString() to initials.toString() else EMPTY
     }
 
+    /**
+     * 逐字拼音，给“搜索命中高亮”用：返回和 [text] 每个 char 对齐的列表——
+     * 汉字是它的拼音（代理对的两个 char 都放同一个音节），其他字符是它自己；
+     * 一个汉字都没有、或拼音不可用时返回 null。只看前 [MAX_CHARS] 个字符。
+     */
+    fun segments(text: String): List<String>? {
+        val src = Search.head(text, MAX_CHARS)
+        if (src.isEmpty() || !hasHan(src)) return null
+        return synchronized(lock) {
+            val t = tr ?: return@synchronized null
+            val out = ArrayList<String>(src.length)
+            var i = 0
+            while (i < src.length) {
+                val cp = src.codePointAt(i)
+                val n = Character.charCount(cp)
+                val py = if (isHan(cp)) syllable(t, cp) else ""
+                val seg = py.ifEmpty { src.substring(i, i + n) }
+                repeat(n) { out.add(seg) }
+                i += n
+            }
+            out
+        }
+    }
+
     /** 单个汉字的拼音；必须在持有 lock 时调用。 */
     private fun syllable(t: Transliterator, cp: Int): String {
         cache[cp]?.let { return it }

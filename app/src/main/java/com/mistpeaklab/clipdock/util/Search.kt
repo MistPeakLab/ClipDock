@@ -119,6 +119,70 @@ object Search {
         return (sb?.toString() ?: s).lowercase(Locale.ROOT)
     }
 
+    /** 逐字拼音（见 [Pinyin.segments]）；和 [pinyin] 一样做成可替换的，单元测试里换成假的 */
+    @Volatile
+    var segments: (String) -> List<String>? = { Pinyin.segments(it) }
+
+    /**
+     * 搜索命中高亮：返回 [text] 里应该标出来的区间（按位置排序、已合并）。
+     * - 关键词直接出现在原文里（不分大小写、全角半角）就标原文那几个字；
+     * - 否则（[pinyin] 打开时）按全拼或首字母找，标出拼音对应的那几个汉字，比如 kuaidi / kd 标“快递”。
+     * 只是显示用：找不到就不标，不影响搜索结果本身。
+     */
+    fun highlight(text: String, terms: List<String>, pinyin: Boolean): List<IntRange> {
+        if (terms.isEmpty() || text.isEmpty()) return emptyList()
+        val t = normalize(text)
+        val out = ArrayList<IntRange>()
+        var segs: List<IntRange>? = null   // 每个字（码点）在 text 里的位置
+        var full: String? = null; var fullAt: IntArray? = null
+        var ini: String? = null
+        for (term in terms) {
+            if (term.isEmpty()) continue
+            var found = false
+            var i = t.indexOf(term)
+            while (i >= 0) { out += i until i + term.length; found = true; i = t.indexOf(term, i + term.length) }
+            if (found || !pinyin) continue
+            if (segs == null) {
+                val py = runCatching { segments(t) }.getOrNull() ?: continue
+                val s = ArrayList<IntRange>(); val fb = StringBuilder(); val ib = StringBuilder(); val at = ArrayList<Int>()
+                var k = 0
+                while (k < py.size) {
+                    var e = k + 1
+                    while (e < py.size && e < t.length && Character.isLowSurrogate(t[e])) e++
+                    val seg = py[k].lowercase(Locale.ROOT)
+                    repeat(seg.length) { at += s.size }
+                    fb.append(seg); ib.append(seg.firstOrNull() ?: ' ')
+                    s += k until e
+                    k = e
+                }
+                segs = s; full = fb.toString(); fullAt = at.toIntArray(); ini = ib.toString()
+            }
+            val f = full!!; val fa = fullAt!!; val sg = segs!!
+            var j = f.indexOf(term)
+            if (j >= 0) {
+                while (j >= 0) {
+                    out += sg[fa[j]].first..sg[fa[j + term.length - 1]].last
+                    j = f.indexOf(term, j + term.length)
+                }
+                continue
+            }
+            j = ini!!.indexOf(term)
+            while (j >= 0) {
+                out += sg[j].first..sg[j + term.length - 1].last
+                j = ini.indexOf(term, j + term.length)
+            }
+        }
+        if (out.isEmpty()) return out
+        out.sortBy { it.first }
+        val merged = ArrayList<IntRange>()
+        for (r in out) {
+            val last = merged.lastOrNull()
+            if (last != null && r.first <= last.last + 1) merged[merged.size - 1] = last.first..maxOf(last.last, r.last)
+            else merged += r
+        }
+        return merged
+    }
+
     private fun isBlank(c: Char): Boolean =
         // 不间断空格、零宽空格、BOM 从网页粘贴查询时常带着，也当作分隔
         c.isWhitespace() || c == '\u00A0' || c == '\u200B' || c == '\uFEFF'

@@ -56,7 +56,7 @@ import kotlinx.coroutines.withContext
  * - 平板是居中的大弹窗（4 列），手机是贴底的弹层（2 列）。键盘：Tab 切换分组，←→ 换一种，Enter 复制。
  */
 
-private enum class TGroup(val zh: String, val en: String, val icon: Int) {
+internal enum class TGroup(val zh: String, val en: String, val icon: Int) {
     CLEAN("清理", "Clean up", R.drawable.ic_gen_tg_clean),
     CASE("大小写", "Case", R.drawable.ic_gen_tg_case),
     CJK("中英排版", "CJK & width", R.drawable.ic_gen_tg_cjk),
@@ -67,9 +67,9 @@ private enum class TGroup(val zh: String, val en: String, val icon: Int) {
 }
 
 /** 每种变换：所在分组、图标、迷你示例 */
-private class TSpec(val t: Transform, val group: TGroup, val icon: Int, val example: String)
+internal class TSpec(val t: Transform, val group: TGroup, val icon: Int, val example: String)
 
-private val SPECS = listOf(
+internal val SPECS = listOf(
     TSpec(Transform.TRIM, TGroup.CLEAN, R.drawable.ic_gen_tf_trim, "␣ab␣ → ab"),
     TSpec(Transform.JOIN_LINES, TGroup.CLEAN, R.drawable.ic_gen_tf_join_lines, "a⏎b → ab"),
     TSpec(Transform.REMOVE_BLANK_LINES, TGroup.CLEAN, R.drawable.ic_gen_tf_blank_lines, "a⏎⏎b → a⏎b"),
@@ -91,12 +91,12 @@ private val SPECS = listOf(
     TSpec(Transform.QUOTE, TGroup.LINES, R.drawable.ic_gen_tf_quote, "ab → > ab"),
 ).let { list -> list + Transform.entries.filter { t -> list.none { it.t == t } }.map { TSpec(it, TGroup.CLEAN, R.drawable.ic_gen_transform, "") } }
 
-private val EXTRACTS = setOf(Transform.EXTRACT_NUMBERS, Transform.EXTRACT_URLS, Transform.EXTRACT_EMAILS)
+internal val EXTRACTS = setOf(Transform.EXTRACT_NUMBERS, Transform.EXTRACT_URLS, Transform.EXTRACT_EMAILS)
 
 /** 试算时只用前这么多字：卡片上的“有没有效果”只是提示，真正复制时用全文 */
-private const val PROBE_CHARS = 20_000
+internal const val PROBE_CHARS = 20_000
 
-private fun badgeOf(t: Transform, src: String, out: String?): Pair<String, Boolean>? = when {
+internal fun badgeOf(t: Transform, src: String, out: String?): Pair<String, Boolean>? = when {
     out == null -> null
     out == src || (t in EXTRACTS && out.isBlank()) -> tr("无变化", "No change") to false
     t in EXTRACTS -> tr("找到 %d 个", "%d found", out.lines().count { it.isNotBlank() }) to true

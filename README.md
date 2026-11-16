@@ -115,16 +115,16 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 <td width="50%"><img src="docs/screenshots/item-menu.jpg" alt="更多菜单"></td>
 </tr>
 <tr>
-<td align="center"><b>悬浮面板</b><br>Win + V 唤出，直接打字就搜，1–9 快选</td>
+<td align="center"><b>悬浮面板</b><br>Win + V 唤出，直接打字就搜，1–9 快选；只有选中的那一行露出按钮，底部是快捷键提示</td>
 <td align="center"><b>“更多”菜单</b><br>全部动作分“使用 / 整理”两组，什么都找得到</td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/screenshots/multiselect-all.jpg" alt="Ctrl+A 全选"></td>
-<td width="50%"><img src="docs/screenshots/multiselect-ctrl.jpg" alt="Ctrl+点击 多选"></td>
+<td width="50%"><img src="docs/screenshots/panel-multi.jpg" alt="面板多选"></td>
+<td width="50%"><img src="docs/screenshots/panel-transform.jpg" alt="面板里变换后粘贴"></td>
 </tr>
 <tr>
-<td align="center"><b>Ctrl + A 全选</b><br>选中的条目打勾，底部出现操作条</td>
-<td align="center"><b>Ctrl + 点击 挑几条</b><br>再按 Ctrl + V，按列表顺序合并后直接贴进输入框</td>
+<td align="center"><b>多选</b><br>Ctrl + 点击、Shift + ↑↓ 或长按挑几条，底部换成操作条，Ctrl + V 按顺序合并贴进输入框</td>
+<td align="center"><b>变换后粘贴</b><br>在面板里换一页：没效果的变灰，提取类直接显示找到几个，Enter 贴出去</td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/screenshots/modes.jpg" alt="权限与模式"></td>
@@ -136,12 +136,12 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 </tr>
 </table>
 
-**手机上也能用**：底部导航、两列卡片，详情从底部弹出，悬浮面板可以拖动和缩放。
+**手机上也能用**：底部导航、两列卡片，详情从底部弹出，悬浮面板是能拖动、能缩放的小窗（第三张：搜 “会”，命中的字标黄）。
 
 <p align="center">
 <img src="docs/screenshots/phone-home.jpg" width="24%" alt="手机：记录页（浅色）">
 <img src="docs/screenshots/phone-wheel.jpg" width="24%" alt="手机：动作轮">
-<img src="docs/screenshots/phone-home-dark.jpg" width="24%" alt="手机：记录页（深色）">
+<img src="docs/screenshots/phone-panel.jpg" width="24%" alt="手机：悬浮面板">
 <img src="docs/screenshots/phone-detail-dark.jpg" width="24%" alt="手机：详情弹层">
 </p>
 
@@ -234,10 +234,11 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 **用起来更顺**
 - 首次启动有**引导**：选使用方式和“简洁 / 全能”，每一项权限都说清楚开了能做什么
 - **简洁模式**只留记录、搜索、粘贴、收藏；**全能模式**打开全部功能，也可以逐项开关
-- 手机竖屏：底部导航、单列卡片，悬浮面板变成贴底抽屉
+- 手机竖屏：底部导航、单列卡片；悬浮面板也是能拖动、能缩放的小窗，不占半屏
 - **中英文界面**随系统语言切换（设置里也能改）
 - 深色 / 浅色主题
 - **v0.6.1 界面重做**：动作条 / 动作轮分工、变换弹窗、详情视图、设置各页逐页重新设计，图标统一成一套
+- **v0.6.2 悬浮面板重做**：和主界面同一套样式；搜索命中的字（含拼音命中的汉字）标黄；手机上也是悬浮小窗
 
 <p align="center">
 <img src="docs/screenshots/features.jpg" width="49%" alt="简洁 / 全能模式和逐项开关">

@@ -2,8 +2,12 @@ package com.mistpeaklab.clipdock
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.EditText
+import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -90,11 +94,56 @@ class ScreenshotTest {
         "favorites" to { text("收藏").performClick(); pause() },
         "me" to { text("我的").performClick(); pause() },
         // 悬浮面板（基础模式：悬浮窗权限）
-        "panel" to {
-            org.robolectric.shadows.ShadowSettings.setCanDrawOverlays(true)
-            rule.runOnUiThread { PanelHost.show(rule.activity) }; pause()
+        "panel" to { showPanel() },
+        "panel-search" to { showPanel(); panelType("会"); pause() },
+        "panel-multi" to {
+            showPanel()
+            panelKey(KeyEvent.KEYCODE_DPAD_DOWN); panelKey(KeyEvent.KEYCODE_ENTER, KeyEvent.META_SHIFT_ON)
+            panelKey(KeyEvent.KEYCODE_DPAD_DOWN); panelKey(KeyEvent.KEYCODE_ENTER, KeyEvent.META_SHIFT_ON)
+            panelKey(KeyEvent.KEYCODE_DPAD_DOWN); panelKey(KeyEvent.KEYCODE_DPAD_DOWN); panelKey(KeyEvent.KEYCODE_ENTER, KeyEvent.META_SHIFT_ON)
+            pause()
+        },
+        "panel-menu" to {
+            showPanel(); panelClick { it.contentDescription == "更多" }; pause()
+        },
+        "panel-transform" to {
+            showPanel(); panelType("快递"); pause()
+            panelKey(KeyEvent.KEYCODE_ENTER, KeyEvent.META_SHIFT_ON); pause()
+            panelClick { it is TextView && it.text.toString() == "变换" }
+            Thread.sleep(800); pause()
+            panelKey(KeyEvent.KEYCODE_TAB); panelKey(KeyEvent.KEYCODE_TAB); pause()
         },
     )
+
+    // ---------------- 悬浮面板（基础模式：悬浮窗权限） ----------------
+
+    private fun showPanel() {
+        org.robolectric.shadows.ShadowSettings.setCanDrawOverlays(true)
+        rule.runOnUiThread { PanelHost.show(rule.activity) }; pause()
+    }
+
+    private fun panelRoot(): View? = windowRoots().lastOrNull { it !== rule.activity.window.decorView && it.isShown }
+
+    private fun findView(v: View, pred: (View) -> Boolean): View? {
+        if (pred(v)) return v
+        if (v is ViewGroup) for (i in 0 until v.childCount) findView(v.getChildAt(i), pred)?.let { return it }
+        return null
+    }
+
+    /** 点面板里第一个符合条件的控件（文字本身不可点时点它可点的父容器） */
+    private fun panelClick(pred: (View) -> Boolean) = rule.runOnUiThread {
+        var v = panelRoot()?.let { findView(it, pred) }
+        while (v != null && !v.isClickable) v = v.parent as? View
+        v?.performClick() ?: println("面板里没找到要点的控件")
+    }
+
+    private fun panelType(s: String) = rule.runOnUiThread {
+        (panelRoot()?.let { findView(it) { v -> v is EditText } } as? EditText)?.setText(s)
+    }
+
+    private fun panelKey(code: Int, meta: Int = 0) = rule.runOnUiThread {
+        PanelHost.handleKey(KeyEvent(0, 0, KeyEvent.ACTION_DOWN, code, 0, meta))
+    }
 
     /** “我的”下面的子页：按入口的副标题找（标题和底部导航会重名） */
     private val subPages = listOf(
