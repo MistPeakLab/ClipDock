@@ -57,11 +57,11 @@ class ScreenshotTest {
             "【快递通知】您好，您在 3 月 12 日购买的「机械键盘 K8 Pro」已发货，运单号 SF1428 5736 9021，预计 2 天内送达。",
             "https://github.com/MistPeakLab/ClipDock",
             "会议纪要：本周五 14:30 在 3 号会议室讨论 v0.6.1 发布计划。负责人张伟（zhangwei@example.com）。",
-            "测试一下",
-            "The quick brown fox jumps over the lazy dog.",
+            "下午三点的会改到四点，地点不变。",
+            "Please review the PR before Friday. Thanks!",
             "#4C8DF6",
             "收件人：王经理 138 0013 8000 上海市浦东新区世纪大道 100 号",
-            "忽略",
+            "zhangwei@example.com",
         )
         texts.forEach { TestEnv.tick(60_000); ClipStore.add(it, Prefs(ctx).maxItems) }
         TestEnv.settle()
@@ -76,16 +76,16 @@ class ScreenshotTest {
 
     private val scenes: List<Pair<String, () -> Unit>> = listOf(
         "home" to {},
-        "dock" to { text("测试一下").performClick(); pause() },
-        "wheel" to { text("测试一下").performTouchInput { longClick() }; pause() },
+        "dock" to { text("改到四点").performClick(); pause() },
+        "wheel" to { text("改到四点").performTouchInput { longClick() }; pause() },
         "transform" to {
             text("快递通知").performClick(); pause()
             text("变换").performClick(); pause(1500)
         },
-        "more" to { text("测试一下").performClick(); pause(); text("更多").performClick(); pause() },
+        "more" to { text("改到四点").performClick(); pause(); text("更多").performClick(); pause() },
         "detail" to {
             Prefs(ctx).recordsLayout = 1; scene++; pause()
-            text("测试一下").performClick(); pause()
+            text("改到四点").performClick(); pause()
         },
         "favorites" to { text("收藏").performClick(); pause() },
         "me" to { text("我的").performClick(); pause() },
@@ -114,7 +114,7 @@ class ScreenshotTest {
         Prefs(ctx).theme = theme
         Prefs(ctx).applyMode(Mode.FULL)
         // 回收站里放两条，截图才有内容
-        ClipStore.history().filter { it.text == "忽略" || it.text.startsWith("The quick") }.forEach { ClipStore.delete(it.id) }
+        ClipStore.history().filter { it.text.startsWith("zhangwei") || it.text.startsWith("Please review") }.forEach { ClipStore.delete(it.id) }
         TestEnv.settle()
         L.init(rule.activity)
         rule.setContent { key(scene) { AppTheme { AppRoot() } } }
@@ -176,28 +176,31 @@ class ScreenshotTest {
         return (f.get(g) as List<View>).toList()
     }
 
-    @Test @Config(qualifiers = "zh-rCN-w1280dp-h800dp-land-mdpi")
+    @Test @Config(qualifiers = "zh-rCN-w1280dp-h800dp-land-xhdpi")
     fun tabletLight() = run("tablet-light", 1)
 
-    @Test @Config(qualifiers = "zh-rCN-w1280dp-h800dp-land-mdpi")
+    @Test @Config(qualifiers = "zh-rCN-w1280dp-h800dp-land-xhdpi")
     fun tabletSimple() = run("tablet-simple", 1, Mode.SIMPLE)
 
-    @Test @Config(qualifiers = "zh-rCN-w1280dp-h800dp-land-mdpi")
+    @Test @Config(qualifiers = "zh-rCN-w1280dp-h800dp-land-xhdpi")
     fun tabletDark() = run("tablet-dark", 2)
 
-    @Test @Config(qualifiers = "zh-rCN-w400dp-h860dp-port-mdpi")
+    @Test @Config(qualifiers = "zh-rCN-w400dp-h860dp-port-xhdpi")
     fun phoneLight() = run("phone-light", 1)
 
-    @Test @Config(qualifiers = "zh-rCN-w400dp-h860dp-port-mdpi")
+    @Test @Config(qualifiers = "zh-rCN-w400dp-h860dp-port-xhdpi")
     fun phoneDark() = run("phone-dark", 2)
 
-    // 设置子页用加高的屏幕，一屏看完整页
-    @Test @Config(qualifiers = "zh-rCN-w1280dp-h1600dp-land-mdpi")
+    // 设置子页：和真机一样的屏幕高度（README 用）；要看整页时把 h800dp 临时改成 h1600dp
+    @Test @Config(qualifiers = "zh-rCN-w1280dp-h800dp-land-xhdpi")
     fun settingsTabletLight() = runSettings("set-tablet-light", 1)
 
-    @Test @Config(qualifiers = "zh-rCN-w1280dp-h1600dp-land-mdpi")
+    @Test @Config(qualifiers = "zh-rCN-w1280dp-h800dp-land-xhdpi")
     fun settingsTabletDark() = runSettings("set-tablet-dark", 2)
 
-    @Test @Config(qualifiers = "zh-rCN-w400dp-h1600dp-port-mdpi")
+    @Test @Config(qualifiers = "zh-rCN-w400dp-h860dp-port-xhdpi")
     fun settingsPhoneLight() = runSettings("set-phone-light", 1)
+
+    @Test @Config(qualifiers = "zh-rCN-w400dp-h860dp-port-xhdpi")
+    fun settingsPhoneDark() = runSettings("set-phone-dark", 2)
 }

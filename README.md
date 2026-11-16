@@ -85,14 +85,38 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 
 ## 长这样
 
+浅色、深色跟随系统，也可以在 **我的 › 外观与语言** 里固定一种。
+
 <table>
 <tr>
+<td width="50%"><img src="docs/screenshots/home.jpg" alt="记录页：聚拢视图（浅色）"></td>
+<td width="50%"><img src="docs/screenshots/home-dark.jpg" alt="记录页：聚拢视图（深色）"></td>
+</tr>
+<tr>
+<td align="center" colspan="2"><b>记录 / 收藏 / 我的</b>　卡片墙一眼扫过去；顶部按「今天 / 链接 / 类型 / 来源」筛选，拼音也能搜</td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/dock.jpg" alt="单击选中，底部出现动作条"></td>
+<td width="50%"><img src="docs/screenshots/wheel.jpg" alt="长按出现动作轮"></td>
+</tr>
+<tr>
+<td align="center"><b>单击：动作条</b><br>管“用这条内容”：复制 / 拆开 / 变换 / 收藏 / 更多；双击直接复制</td>
+<td align="center"><b>长按：动作轮</b><br>管“整理这一条”：中间复制，外圈收藏、分组、备注、隐藏、编辑、分享、删除</td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/detail.jpg" alt="详情视图（浅色）"></td>
+<td width="50%"><img src="docs/screenshots/detail-dark.jpg" alt="详情视图（深色）"></td>
+</tr>
+<tr>
+<td align="center" colspan="2"><b>详情视图</b>　左边列表、右边全文，适合看长文；全文可以直接选中一部分复制。右上角和卡片墙来回切换</td>
+</tr>
+<tr>
 <td width="50%"><img src="docs/screenshots/panel.jpg" alt="悬浮面板"></td>
-<td width="50%"><img src="docs/screenshots/home.jpg" alt="主界面"></td>
+<td width="50%"><img src="docs/screenshots/item-menu.jpg" alt="更多菜单"></td>
 </tr>
 <tr>
 <td align="center"><b>悬浮面板</b><br>Win + V 唤出，直接打字就搜，1–9 快选</td>
-<td align="center"><b>记录 / 收藏 / 我的</b><br>三区导航，深色模式；顶部筛选「今天 / 链接 / 类型 / 来源」</td>
+<td align="center"><b>“更多”菜单</b><br>全部动作分“使用 / 整理”两组，什么都找得到</td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/screenshots/multiselect-all.jpg" alt="Ctrl+A 全选"></td>
@@ -104,13 +128,22 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 </tr>
 <tr>
 <td width="50%"><img src="docs/screenshots/modes.jpg" alt="权限与模式"></td>
-<td width="50%"><img src="docs/screenshots/settings.jpg" alt="设置"></td>
+<td width="50%"><img src="docs/screenshots/settings.jpg" alt="唤起与面板"></td>
 </tr>
 <tr>
-<td align="center"><b>权限与模式</b><br>每一档需要什么、能做什么，写得明明白白</td>
-<td align="center"><b>设置</b><br>快捷键可录制，关闭方式逐项可选</td>
+<td align="center"><b>权限与模式</b><br>开了几项一目了然，每一项都写清楚开了能做什么</td>
+<td align="center"><b>唤起与面板</b><br>快捷键可录制，关闭方式逐项可选，面板快捷键一张表看完</td>
 </tr>
 </table>
+
+**手机上也能用**：底部导航、两列卡片，详情从底部弹出，悬浮面板可以拖动和缩放。
+
+<p align="center">
+<img src="docs/screenshots/phone-home.jpg" width="24%" alt="手机：记录页（浅色）">
+<img src="docs/screenshots/phone-wheel.jpg" width="24%" alt="手机：动作轮">
+<img src="docs/screenshots/phone-home-dark.jpg" width="24%" alt="手机：记录页（深色）">
+<img src="docs/screenshots/phone-detail-dark.jpg" width="24%" alt="手机：详情弹层">
+</p>
 
 <p align="center"><sub>它就是为这种姿势设计的：平板立起来，手留在键盘上。</sub></p>
 
@@ -204,6 +237,7 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 - 手机竖屏：底部导航、单列卡片，悬浮面板变成贴底抽屉
 - **中英文界面**随系统语言切换（设置里也能改）
 - 深色 / 浅色主题
+- **v0.6.1 界面重做**：动作条 / 动作轮分工、变换弹窗、详情视图、设置各页逐页重新设计，图标统一成一套
 
 <p align="center">
 <img src="docs/screenshots/features.jpg" width="49%" alt="简洁 / 全能模式和逐项开关">
@@ -218,14 +252,14 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 </tr>
 <tr>
 <td align="center"><b>隐藏内容</b><br>加密保存，查看或粘贴前验证指纹 / 锁屏密码</td>
-<td align="center"><b>粘贴前变换</b><br>去换行、转大小写、去跟踪参数……不改原记录</td>
+<td align="center"><b>变换后复制</b><br>19 种分 5 组，先试算：没效果的变灰，提取类直接显示找到几个；不改原记录</td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/screenshots/item-menu.jpg" alt="条目菜单"></td>
+<td width="50%"><img src="docs/screenshots/paste.jpg" alt="粘贴设置"></td>
 <td width="50%"><img src="docs/screenshots/trash.jpg" alt="回收站"></td>
 </tr>
 <tr>
-<td align="center"><b>每个条目的完整菜单</b><br>查看 / 复制 / 变换 / 分享 / 编辑 / 常用语 / 备注 / 分组 / 隐藏 / 删除</td>
+<td align="center"><b>粘贴</b><br>直接粘贴、清理格式；多条合并的分隔旁边直接显示合并效果</td>
 <td align="center"><b>回收站</b><br>删除的、超出上限的记录保留 30 天，随时恢复</td>
 </tr>
 </table>
@@ -384,7 +418,7 @@ On Android, `Ctrl + V` only pastes the latest copy. Reaching older items means s
 - **Simple / Full modes**: start with just history, search, paste and favourites, turn on the rest whenever you like
 - **Fully offline**: no `INTERNET` permission, text only, stored locally
 
-Requires Android 14+. The UI is available in Chinese and English.
+Requires Android 14+. The UI is available in Chinese and English, in light and dark themes.
 
 ---
 
