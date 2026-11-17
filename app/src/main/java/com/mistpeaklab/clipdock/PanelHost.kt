@@ -7,6 +7,8 @@ import android.provider.Settings
 import android.view.KeyEvent
 import android.view.WindowManager
 import android.widget.Toast
+import com.mistpeaklab.clipdock.floatball.FloatBall
+import com.mistpeaklab.clipdock.floatball.Mascot
 
 /** 读写系统剪贴板 */
 object ClipReader {
@@ -29,11 +31,14 @@ object ClipReader {
      */
     fun captureResult(ctx: Context, sourcePkg: String? = null): String? {
         ClipStore.init(ctx)
+        val prefs = Prefs(ctx)
+        if (prefs.capturePaused) return Diag.PAUSED
         val c = readClip(ctx) ?: return null
         if (c.text.isBlank()) return Diag.EMPTY
-        val prefs = Prefs(ctx)
         if (prefs.skipSensitiveSources && (c.sensitive || sourcePkg in AppInfo.PASSWORD_MANAGERS)) return Diag.SKIPPED
-        return if (ClipStore.add(c.text, prefs.maxItems, sourcePkg = sourcePkg)) Diag.NEW else Diag.DUP
+        if (!ClipStore.add(c.text, prefs.maxItems, sourcePkg = sourcePkg)) return Diag.DUP
+        FloatBall.react(Mascot.CATCH)
+        return Diag.NEW
     }
 
     /** 本应用自己的窗口在前台时读取并记录，结果写进诊断 */
@@ -41,7 +46,7 @@ object ClipReader {
         val r = captureResult(ctx)
         val empty = r == null || r == Diag.EMPTY
         Diag.log(trigger, null, r ?: Diag.EMPTY, if (empty) emptyReason(ctx) else null)
-        return !empty && r != Diag.SKIPPED
+        return !empty && r != Diag.SKIPPED && r != Diag.PAUSED
     }
 
     /** 没读到文字时，说清楚是哪一种：真的空、系统没放行，还是里面放的不是文字（图片、文件） */
@@ -91,7 +96,7 @@ object PanelHost {
             host, host.getSystemService(WindowManager::class.java), prefs, type, focusable,
             onAct = { text, mode, cards -> act(host, prefs, text, mode, cards) },
             onFocused = { ClipReader.capture(host, "PANEL_OPEN") },
-            onDismiss = { panel = null },
+            onDismiss = { panel = null; FloatBall.onPanelClosed() },
         ).also { it.show() }
         return true
     }
@@ -112,6 +117,7 @@ object PanelHost {
     private fun act(ctx: Context, prefs: Prefs, text: String, mode: Int, cards: () -> List<FlyCard>) {
         val t = TextTools.prepare(prefs, text)
         ClipReader.write(ctx, t)
+        FloatBall.react(Mascot.THROW)
         val paste = when (mode) { MODE_PASTE -> true; MODE_COPY -> false; else -> prefs.autoPaste }
         if (!paste) return
         val svc = ClipService.instance

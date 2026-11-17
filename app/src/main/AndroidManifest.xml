@@ -9,6 +9,10 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- 自动备份的定时任务在重启后保留 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 悬浮球：没开增强模式时由前台服务承载悬浮窗 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <uses-feature android:name="android.hardware.fingerprint" android:required="false" />
 
@@ -103,6 +107,16 @@
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
+        </service>
+
+        <!-- 悬浮球宿主（没开增强模式时） -->
+        <service
+            android:name=".floatball.FloatService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Floating bubble that opens the clipboard history panel on top of other apps" />
         </service>
 
         <!-- 自动备份（系统定时叫醒） -->

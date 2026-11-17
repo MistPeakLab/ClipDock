@@ -53,6 +53,7 @@ object Unlock {
     private var pending: (() -> Unit)? = null
 
     fun run(ctx: Context, action: () -> Unit) {
+        com.mistpeaklab.clipdock.floatball.FloatBall.react(com.mistpeaklab.clipdock.floatball.Mascot.SHY)
         if (Vault.isUnlocked()) { action(); return }
         pending = action
         ctx.startActivity(

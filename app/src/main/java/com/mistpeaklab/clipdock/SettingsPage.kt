@@ -64,6 +64,7 @@ fun MePage(tick: Int, open: (Sub) -> Unit) {
                 else -> tr("仅主界面：打开随贴时记录", "App only: records when ClipDock is opened")
             }, if (level == 2) null else "!", icon = R.drawable.ic_gen_shield) { open(Sub.Permissions) }
             Entry(tr("唤起与面板", "Hotkey & panel"), tr("快捷键、关闭方式、面板大小", "Hotkey, how the panel closes, size"), icon = R.drawable.ic_gen_keyboard) { open(Sub.Panel) }
+            Entry(tr("悬浮球", "Floating bubble"), remember(tick) { Prefs(ctx).let { p -> if (!p.floatEnabled) tr("未开启 · 看板娘卡卡常驻屏幕边", "Off · Kaka on the edge of your screen") else if (p.capturePaused) tr("已开启 · 记录已暂停", "On · recording paused") else tr("已开启", "On") } }, icon = R.drawable.ic_gen_pick) { open(Sub.Float) }
             Entry(tr("粘贴", "Pasting"), tr("直接粘贴、清理格式、多条合并", "Paste directly, clean up, merging"), icon = R.drawable.ic_gen_copy) { open(Sub.Paste) }
             Entry(tr("记录", "History"), tr("保留条数、补漏检测、清空", "How many to keep, catch-up checks, clear"), icon = R.drawable.ic_gen_history) { open(Sub.Record) }
         }

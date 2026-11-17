@@ -150,6 +150,7 @@ class ScreenshotTest {
         "permissions" to "权限与模式",
         "features" to "逐项设置",
         "panelset" to "快捷键、关闭方式",
+        "float" to "看板娘卡卡常驻屏幕边",
         "paste" to "直接粘贴、清理格式",
         "record" to "保留条数",
         "privacy" to "隐藏内容、不记录的应用",

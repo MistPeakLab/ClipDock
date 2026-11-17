@@ -55,6 +55,8 @@ class MainActivity : ComponentActivity() {
         // 定时任务偶尔会被系统清掉：排着就不动，没排才补上
         if (AutoBackup.enabled(Prefs(this)) && !AutoBackup.scheduled(this)) AutoBackup.schedule(this)
         AutoBackup.runIfDue(this)
+        // 悬浮球：刚授予了悬浮窗权限、或者被系统清掉后回到这里，按设置补上
+        com.mistpeaklab.clipdock.floatball.FloatBall.sync(this)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -107,7 +109,7 @@ fun AppTheme(content: @Composable () -> Unit) {
 enum class Tab { Records, Favorites, Me }
 
 /** “我的”下面的子页面 */
-enum class Sub { None, Permissions, Features, Panel, Paste, Record, Privacy, Rules, Backup, Trash, Diag, Look }
+enum class Sub { None, Permissions, Features, Panel, Float, Paste, Record, Privacy, Rules, Backup, Trash, Diag, Look }
 
 @Composable
 fun AppRoot() {
@@ -164,6 +166,7 @@ private fun SubPage(sub: Sub, tick: Int, open: (Sub) -> Unit, onBack: () -> Unit
     Sub.Permissions -> PermissionsPage(tick, onBack)
     Sub.Features -> FeaturesPage(onBack)
     Sub.Panel -> PanelSettingsPage(onBack)
+    Sub.Float -> FloatSettingsPage(tick, onBack)
     Sub.Paste -> PasteSettingsPage(onBack)
     Sub.Record -> RecordSettingsPage(onBack) { open(Sub.Trash) }
     Sub.Privacy -> PrivacyPage(onBack) { open(Sub.Rules) }

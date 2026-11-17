@@ -91,6 +91,8 @@ class ClipService : AccessibilityService() {
             else registerReceiver(unlockReceiver, f)
         }
         requestCapture("SERVICE_START", 800)
+        // 悬浮球改由无障碍宿主创建（不需要悬浮窗权限，也更不容易被系统清掉）
+        com.mistpeaklab.clipdock.floatball.FloatBall.sync(this)
     }
 
     override fun onDestroy() {
@@ -100,6 +102,8 @@ class ClipService : AccessibilityService() {
         pendingRun = null
         removeProbe()
         if (instance === this) instance = null
+        // 无障碍关掉了：悬浮球退回悬浮窗宿主（有权限时）
+        com.mistpeaklab.clipdock.floatball.FloatBall.hostGone(this)
         super.onDestroy()
     }
 
@@ -503,7 +507,8 @@ class ClipService : AccessibilityService() {
         runCatching { wm.removeViewImmediate(v) }
     }
 
-    private fun record(text: String, source: String?): Boolean = ClipStore.add(text, prefs.maxItems, sourcePkg = source)
+    private fun record(text: String, source: String?): Boolean =
+        ClipStore.add(text, prefs.maxItems, sourcePkg = source).also { if (it) com.mistpeaklab.clipdock.floatball.FloatBall.react(com.mistpeaklab.clipdock.floatball.Mascot.CATCH) }
 }
 
 fun Context.isClipServiceOn(): Boolean = ClipService.instance != null

@@ -28,6 +28,7 @@ object Diag {
     const val ADD_FAIL = "ADD_FAIL"  // 探针窗口加不上
     const val FALLBACK = "FALLBACK"  // 没读到剪贴板，改用了选中的文字
     const val SKIPPED = "SKIPPED"    // 读到了，但按设置不记录（密码管理器、标记为敏感的内容）
+    const val PAUSED = "PAUSED"      // 记录已暂停，没有去读
     const val OK = "OK"              // 存储方面的操作完成了（详情里是说明）
     const val ERROR = "ERROR"        // 存储方面出了错（详情里是原因）
 
@@ -217,6 +218,7 @@ object Diag {
         NO_FOCUS -> tr("没读到（探针未获得焦点）", "Not read (probe got no focus)")
         ADD_FAIL -> tr("没读到（探针窗口添加失败）", "Not read (couldn't add the probe window)")
         FALLBACK -> tr("没读到剪贴板，用了选中的文字", "Used the selected text instead")
+        PAUSED -> tr("记录已暂停，没有读取", "Recording is paused — not read")
         OK -> tr("完成", "Done")
         ERROR -> tr("出错", "Error")
         SKIPPED -> tr("敏感内容，按设置没有记录", "Sensitive — skipped by your settings")

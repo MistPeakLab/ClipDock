@@ -427,6 +427,7 @@ object ClipStore {
         persist { r -> r.updateAll(change.map { it to ContentValues().apply { put("pinned", if (on) 1 else 0) } }) }
         // 这里不按条数上限淘汰：否则刚取消收藏的旧内容会当场从眼前消失。等下次有新内容进来时再一起算
         commit(_items.value.map { if (it.id in change) it.copy(pinned = on) else it }, Int.MAX_VALUE)
+        if (on) com.mistpeaklab.clipdock.floatball.FloatBall.react(com.mistpeaklab.clipdock.floatball.Mascot.HAPPY)
     }
 
     /** 删除：进回收站（回收站功能关闭时直接清掉） */

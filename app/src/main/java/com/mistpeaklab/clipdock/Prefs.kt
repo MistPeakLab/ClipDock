@@ -131,6 +131,32 @@ class Prefs(context: Context) {
     /** 界面语言：0 跟随系统 1 中文 2 English */
     var language by int("language", 0)
 
+    // ---------- 悬浮球（0.7） ----------
+
+    /** 悬浮球开关 */
+    var floatEnabled by bool("float_enabled", false)
+
+    /** 样式：0 圆形图标 1 看板娘卡卡 */
+    var floatStyle by int("float_style", 1)
+
+    /** 尺寸：0 小 1 中 2 大 */
+    var floatSize by int("float_size", 1)
+
+    /** 收起贴边时的不透明度（百分比） */
+    var floatAlphaIdle by int("float_alpha_idle", 75)
+
+    /** 停靠在哪一边：0 左 1 右 */
+    var floatSide by int("float_side", 1)
+
+    /** 纵向位置：球心占屏幕高度的千分比 */
+    var floatY by int("float_y", 600)
+
+    /** “今日隐藏”到什么时候（毫秒）；0 = 没隐藏 */
+    var floatHiddenUntil by long("float_hidden_until", 0L)
+
+    /** 暂停记录：期间所有收录触发一律忽略 */
+    var capturePaused by bool("capture_paused", false)
+
     // ---------- 首次引导 ----------
 
     /** 首次引导是否已走完（或被跳过）。升级用户不看引导，见 [upgradedFromLegacy] */
