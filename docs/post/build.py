@@ -12,7 +12,7 @@ from PIL import Image, ImageChops
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "src.html")
-SECTIONS = ["update", "open", "multi", "pick", "transform", "notes"]
+SECTIONS = ["why", "update", "open", "multi", "pick", "transform", "notes"]
 EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 SCALE = 2
 

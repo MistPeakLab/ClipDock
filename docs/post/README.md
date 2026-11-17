@@ -4,9 +4,9 @@
 
 - `post.md`：帖子全文，粘进论坛编辑器即可
 - `src.html`：文字图的源文件。社区规定 AI 生成 / 润色的介绍内容必须以截图发出，所以这些段落做成图片
-- `build.py`：把 `src.html` 每一段渲染成 PNG（`update` / `open` / `multi` / `pick` / `transform` / `notes`）
+- `build.py`：把 `src.html` 每一段渲染成 PNG（`why` / `update` / `open` / `multi` / `pick` / `transform` / `notes`）
 
-**帖子引用了这些文件，不要改名或删除**：本目录的 6 张 PNG，`docs/social-preview.jpg`，以及 `docs/screenshots/` 里的
+**帖子引用了这些文件，不要改名或删除**：本目录的 7 张 PNG，`docs/social-preview.jpg`，以及 `docs/screenshots/` 里的
 `shortcut-open.jpg`、`shortcut-multi.jpg`、`panel-pick.png`、`panel-transform.png`、`home.jpg`、`home-dark.jpg`、`dock.jpg`、`wheel.jpg`、`modes.jpg`、`settings.jpg`、`phone-home.jpg`、`phone-wheel.jpg`、`phone-panel.jpg`、`phone-detail-dark.jpg`。
 
 ## 发新版时

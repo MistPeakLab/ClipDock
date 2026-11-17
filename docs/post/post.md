@@ -44,7 +44,7 @@
 
 ![141054901|517x327](upload://vNOCvtArNCNG3yowlR192jbWxCN.png)
 
-![image|690x256](upload://rTAbLDswIoU55XtOJJBks731yf7.png)
+![也不能说不能用吧](https://cdn.jsdelivr.net/gh/MistPeakLab/ClipDock@main/docs/post/why.png)
 
 
 ### **只做剪贴板这一件事**
