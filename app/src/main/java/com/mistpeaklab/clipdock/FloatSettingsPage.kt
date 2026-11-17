@@ -69,11 +69,22 @@ fun FloatSettingsPage(tick: Int, onBack: () -> Unit) {
                 Choice(tr("大小", "Size"), listOf(tr("小", "S"), tr("中", "M"), tr("大", "L")), prefs.floatSize, icon = R.drawable.ic_gen_grid) {
                     prefs.floatSize = it; changed(true)
                 }
+                Choice(tr("位置", "Placement"), listOf(tr("贴边", "Snap to edge"), tr("随意摆放", "Anywhere")),
+                    if (prefs.floatFree) 1 else 0, icon = R.drawable.ic_gen_pick,
+                    sub = if (prefs.floatFree) tr("拖到哪就停在哪，不会缩到边上", "Stays where you drop it")
+                    else tr("松手自动贴到左边或右边，不用时缩到边上探头", "Snaps to the left or right edge and peeks out when idle")) {
+                    prefs.floatFree = it == 1; changed(true)
+                }
                 val alphas = listOf(50, 75, 100)
                 Choice(tr("收起时的不透明度", "Opacity when tucked away"), alphas.map { "$it%" },
                     alphas.indexOf(prefs.floatAlphaIdle).coerceAtLeast(0), icon = R.drawable.ic_gen_swap) {
                     prefs.floatAlphaIdle = alphas[it]; changed(true)
                 }
+            }
+            if (prefs.floatStyle == 1) Group(tr("卡卡", "Kaka")) {
+                Toggle(tr("随机小动作", "Random little moves"),
+                    tr("没事时隔一阵随机招手、开心、打哈欠、蹦一下……每次不一样", "Now and then she waves, cheers, yawns or hops — a different one each time"),
+                    prefs.floatIdleActs, icon = R.drawable.ic_gen_pick) { prefs.floatIdleActs = it; changed(true) }
             }
             Group(tr("记录", "Recording")) {
                 Toggle(tr("暂停记录", "Pause recording"),
@@ -83,9 +94,9 @@ fun FloatSettingsPage(tick: Int, onBack: () -> Unit) {
             Group(tr("怎么用", "How to use")) {
                 ShortcutTable(listOf(
                     tr("点一下", "Tap") to tr("打开 / 关闭面板", "Open / close the panel"),
-                    tr("按住拖动", "Drag") to tr("换位置，松手自动贴到左边或右边", "Move it; it snaps to the left or right edge"),
+                    tr("按住拖动", "Drag") to tr("换位置（贴边时松手自动贴到左边或右边）", "Move it (snaps to an edge unless placement is Anywhere)"),
                     tr("长按", "Long-press") to tr("环形控制台：滑到一项松手执行；在中心松手可以再点选", "Quick menu: slide to an item and let go, or let go in the middle and tap"),
-                    tr("3 秒不动", "Idle 3 s") to tr("自动收到边上，变淡", "Tucks into the edge and fades"),
+                    tr("3 秒不动", "Idle 3 s") to tr("变淡；贴边时缩到边上探头", "Fades; peeks from the edge when snapping"),
                 ))
             }
         }

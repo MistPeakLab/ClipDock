@@ -202,8 +202,32 @@ internal class FloatController(private val host: Context, private val type: Int)
 
     private val dockRun = Runnable { dock() }
     private val peekRun = Runnable { if (docked && !reacting && base() == Mascot.PEEK) playBase() }
-    private var lastBoredAt = System.currentTimeMillis()
     private val longRun = Runnable { openRadial() }
+
+    /**
+     * 平时的随机小动作：没人理她时，每隔一阵从一组“不代表任何事件”的动作里随机挑一个做（不和上一个重复）。
+     * 接住、抛出、捂眼、睡觉、被拎起这些有明确含义的动作不放进来，免得让人以为发生了什么。
+     */
+    private val idlePool = listOf(Mascot.WAVE, Mascot.HAPPY, Mascot.BORED, Mascot.POKE, Mascot.LAND)
+    private val tapPool = listOf(Mascot.POKE, Mascot.HAPPY, Mascot.WAVE)
+    private var lastRandom: Mascot? = null
+    private val idleRun = object : Runnable {
+        override fun run() {
+            if (destroyed) return
+            if (!dragging && radial == null && !reacting && !prefs.capturePaused) playOnce(pick(idlePool))
+            scheduleIdle()
+        }
+    }
+
+    private fun pick(pool: List<Mascot>): Mascot = pool.filter { it != lastRandom }.random().also { lastRandom = it }
+
+    private fun scheduleIdle() {
+        main.removeCallbacks(idleRun)
+        if (sprite == null || !prefs.floatIdleActs) return
+        // 贴边收起时少动一点（她在边上探头已经够热闹了）；展开或随意摆放时多动一点
+        val delay = if (docked && !free) 20_000L + Random.nextLong(25_000) else 9_000L + Random.nextLong(14_000)
+        main.postDelayed(idleRun, delay)
+    }
 
     fun show(): Boolean {
         (sprite ?: icon)?.let { root.addView(it, FrameLayout.LayoutParams(size, size)) }
@@ -214,6 +238,7 @@ internal class FloatController(private val host: Context, private val type: Int)
         // 出场先招手，然后按平常的节奏收起
         if (sprite != null && base() != Mascot.SLEEP) playOnce(Mascot.WAVE) else playBase()
         scheduleDock()
+        scheduleIdle()
         return true
     }
 
@@ -230,11 +255,20 @@ internal class FloatController(private val host: Context, private val type: Int)
 
     private fun screen() = wm.currentWindowMetrics.bounds
 
-    /** 收起探头（没在做反应）时窗口收窄 */
-    private fun narrow() = mascot && docked && !reacting && radial == null
+    /** 随意摆放（不贴边）：松手停在原地，不吸附、不探头 */
+    private val free = prefs.floatFree
+
+    /**
+     * 只有在“探头”时窗口才收窄（探头的画面只占画布靠边的一半）。
+     * 睡觉、做反应时画面是完整的，不能收窄，否则会被截掉一截。
+     */
+    private fun narrow() = mascot && docked && !reacting && radial == null && base() == Mascot.PEEK
 
     private fun edgeX(): Int {
         val b = screen()
+        if (free) {
+            return (b.left + b.width() * prefs.floatX / 1000f - size / 2f).toInt().coerceIn(b.left, b.right - size)
+        }
         val w = if (narrow()) peekW else size
         val inset = if (mascot) 0 else if (docked) -size / 2 else dp(4f)
         return if (side == 0) b.left + inset else b.right - w - inset
@@ -255,6 +289,7 @@ internal class FloatController(private val host: Context, private val type: Int)
     private fun savePos() {
         val b = screen()
         prefs.floatSide = side
+        prefs.floatX = (((lp.x + size / 2f) - b.left) / b.width() * 1000).toInt().coerceIn(0, 1000)
         prefs.floatY = (((lp.y + size / 2f) - b.top) / b.height() * 1000).toInt().coerceIn(0, 1000)
     }
 
@@ -287,7 +322,7 @@ internal class FloatController(private val host: Context, private val type: Int)
     /** 基础状态：暂停记录时睡觉；否则收起时探头、展开时待机 */
     private fun base(): Mascot = when {
         prefs.capturePaused -> Mascot.SLEEP
-        docked -> Mascot.PEEK
+        docked && !free -> Mascot.PEEK
         else -> Mascot.IDLE
     }
 
@@ -297,13 +332,7 @@ internal class FloatController(private val host: Context, private val type: Int)
         reacting = false
         when (val b = base()) {
             Mascot.PEEK -> {
-                // 隔一阵偶尔打个哈欠，平时探头张望一下就停住，过几秒再探
-                val now = System.currentTimeMillis()
-                if (now - lastBoredAt > 90_000 && Random.nextInt(3) == 0) {
-                    lastBoredAt = now
-                    playOnce(Mascot.BORED)
-                    return
-                }
+                // 探头张望一下就停住，过几秒再探（其他小动作由 idleRun 随机安排）
                 s.play(Mascot.PEEK) { s.pause(); main.postDelayed(peekRun, 4000L + Random.nextLong(4000)) }
             }
             else -> s.play(b)
@@ -393,7 +422,9 @@ internal class FloatController(private val host: Context, private val type: Int)
         if (!opened && !PanelHost.isShowing && !PanelHost.canShow(host)) {
             Toast.makeText(host, tr("需要悬浮窗权限或增强模式才能打开面板", "The panel needs the overlay permission or enhanced mode"), Toast.LENGTH_SHORT).show()
         }
-        if (sprite != null) { if (!prefs.capturePaused) playOnce(Mascot.POKE) } else pulse()
+        // 被点：随机做一个反应（脸红 / 开心 / 招手），不总是同一个
+        if (sprite != null) { if (!prefs.capturePaused) playOnce(pick(tapPool)) } else pulse()
+        scheduleIdle()
         scheduleDock()
     }
 
@@ -404,6 +435,15 @@ internal class FloatController(private val host: Context, private val type: Int)
         sprite?.mirrored = side == 1
         val margin = dp(24f)
         lp.y = lp.y.coerceIn(b.top + margin, b.bottom - size - margin)
+        if (free) {
+            // 随意摆放：停在松手的地方（只保证不出屏幕），落地回弹一下
+            lp.x = lp.x.coerceIn(b.left, b.right - size)
+            runCatching { wm.updateViewLayout(root, lp) }
+            savePos()
+            if (sprite != null && !prefs.capturePaused) playOnce(Mascot.LAND) else playBase()
+            scheduleDock()
+            return
+        }
         val from = lp.x
         val to = edgeX()
         savePos()
@@ -427,7 +467,7 @@ internal class FloatController(private val host: Context, private val type: Int)
         if (dragging || destroyed) return
         val o = screenPos(root, lp)
         val m = RadialMenu(
-            host, wm, type, o[0].toFloat(), o[1].toFloat(), size, side == 0,
+            host, wm, type, o[0].toFloat(), o[1].toFloat(), size, side == 0, !free,
             if (sprite != null) base() else null, radialItems(),
         ) { reaction, then -> onRadialClosed(reaction, then) }
         if (!m.show()) return

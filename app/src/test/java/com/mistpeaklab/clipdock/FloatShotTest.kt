@@ -57,9 +57,10 @@ class FloatShotTest {
         e.recycle()
     }
 
-    private fun run(prefix: String, style: Int, side: Int) {
+    private fun run(prefix: String, style: Int, side: Int, paused: Boolean = false, free: Boolean = false) {
         val p = Prefs(ctx)
         p.theme = 1; p.floatEnabled = true; p.floatStyle = style; p.floatSide = side; p.floatY = 550
+        p.capturePaused = paused; p.floatFree = free; p.floatX = 450; p.floatIdleActs = false
         listOf("下午三点的会改到四点，地点不变。", "SF1428 5736 9021", "https://github.com/MistPeakLab/ClipDock",
             "收件人：王经理 138 0013 8000 上海市浦东新区世纪大道 100 号", "Please review the PR before Friday. Thanks!")
             .forEach { TestEnv.tick(60_000); ClipStore.add(it, p.maxItems) }
@@ -142,6 +143,13 @@ class FloatShotTest {
 
     @Test @Config(qualifiers = "zh-rCN-w1280dp-h800dp-land-xhdpi")
     fun tabletMascotLeft() = run("tablet-kaka-left", 1, 0)
+
+    /** 暂停记录时贴边睡觉：画面是完整的，窗口不能收窄截掉一截 */
+    @Test @Config(qualifiers = "zh-rCN-w1280dp-h800dp-land-xhdpi")
+    fun tabletSleepLeft() = run("tablet-sleep-left", 1, 0, paused = true)
+
+    @Test @Config(qualifiers = "zh-rCN-w1280dp-h800dp-land-xhdpi")
+    fun tabletFree() = run("tablet-free", 1, 0, free = true)
 
     @Test @Config(qualifiers = "zh-rCN-w400dp-h860dp-port-xhdpi")
     fun phoneIconLeft() = run("phone-icon-left", 0, 0)

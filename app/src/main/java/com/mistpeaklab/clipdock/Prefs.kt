@@ -148,6 +148,15 @@ class Prefs(context: Context) {
     /** 停靠在哪一边：0 左 1 右 */
     var floatSide by int("float_side", 1)
 
+    /** 卡卡没事时随机做些小动作 */
+    var floatIdleActs by bool("float_idle_acts", true)
+
+    /** 随意摆放：不贴边，松手停在哪就在哪 */
+    var floatFree by bool("float_free", false)
+
+    /** 横向位置（随意摆放时用）：球心占屏幕宽度的千分比 */
+    var floatX by int("float_x", 900)
+
     /** 纵向位置：球心占屏幕高度的千分比 */
     var floatY by int("float_y", 600)
 

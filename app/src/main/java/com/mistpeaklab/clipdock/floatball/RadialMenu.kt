@@ -60,6 +60,8 @@ class RadialMenu(
     private val ballY: Float,
     private val ballSize: Int,
     private val dockLeft: Boolean,
+    /** 贴边模式：卡卡走到屏幕边上当中心；随意摆放时就在原地当中心 */
+    private val anchorEdge: Boolean,
     private val mascot: Mascot?,
     private val items: List<RadialItem>,
     private val onClosed: (reaction: Mascot?, then: (() -> Unit)?) -> Unit,
@@ -131,7 +133,11 @@ class RadialMenu(
         val b = wm.currentWindowMetrics.bounds
         // 卡卡站的位置：离屏幕边一点点，完整露出来；上下贴边时往里挪，保证每一项都在屏幕内
         // 卡卡的画布左右有留白，贴边放就行
-        mx = if (dockLeft) b.left + dp(6f) + big / 2f else b.right - dp(6f) - big / 2f
+        mx = when {
+            !anchorEdge -> (ballX + ballSize / 2f).coerceIn(b.left + big / 2f, b.right - big / 2f)
+            dockLeft -> b.left + dp(6f) + big / 2f
+            else -> b.right - dp(6f) - big / 2f
+        }
         val margin = bubble + dp(24f)
         my = (ballY + ballSize / 2f).coerceIn(b.top + radius * 0.97f + margin, b.bottom - radius * 0.97f - margin)
 
