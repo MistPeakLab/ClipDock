@@ -80,7 +80,9 @@ class SpriteView(ctx: Context) : View(ctx) {
 
     private fun stopCurrent() {
         token++
-        drawable?.let { it.clearAnimationCallbacks(); it.stop(); it.callback = null }
+        // 不要 clearAnimationCallbacks()：系统在 stop() 时会 post 一个遍历回调列表的任务，
+        // 列表被清成 null 后那个任务会空指针崩溃。旧回调靠 token 判断自动作废。
+        drawable?.let { it.stop(); it.callback = null }
         drawable = null
         onEnd = null
     }

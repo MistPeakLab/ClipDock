@@ -60,6 +60,10 @@ class FloatShotTest {
     private fun run(prefix: String, style: Int, side: Int) {
         val p = Prefs(ctx)
         p.theme = 1; p.floatEnabled = true; p.floatStyle = style; p.floatSide = side; p.floatY = 550
+        listOf("下午三点的会改到四点，地点不变。", "SF1428 5736 9021", "https://github.com/MistPeakLab/ClipDock",
+            "收件人：王经理 138 0013 8000 上海市浦东新区世纪大道 100 号", "Please review the PR before Friday. Thanks!")
+            .forEach { TestEnv.tick(60_000); ClipStore.add(it, p.maxItems) }
+        TestEnv.settle()
         L.init(rule.activity)
         rule.setContent { AppTheme { AppRoot() } }
         idle(300)
@@ -72,21 +76,38 @@ class FloatShotTest {
         capture("$prefix-expanded")
         idle(3200)
         capture("$prefix-docked")
-        // 长按 → 控制台，手指滑向第二项（暂停记录）
+        // 长按 → 控制台：卡卡走到中间，手指先滑到“暂停记录”，再滑到“最近”并伸到第二圈
         val v = ball() ?: error("没找到悬浮球窗口")
         val lp = v.layoutParams as WindowManager.LayoutParams
-        val cx = lp.x + v.width / 2f
-        val cy = lp.y + v.height / 2f
+        val dn = ctx.resources.displayMetrics.density
+        val bx = lp.x + v.width / 2f
+        val by = lp.y + v.height / 2f
+        val b = rule.activity.windowManager.currentWindowMetrics.bounds
+        val big = maxOf(v.width * 1.6f, 120 * dn).toInt()
+        val rad = (96 * dn + big * 0.28f) / dn
+        val mx = if (side == 0) 6 * dn + big / 2f else b.right - 6 * dn - big / 2f
+        val my = by.coerceIn(rad * dn * 0.97f + 50 * dn, b.bottom - rad * dn * 0.97f - 50 * dn)
+        fun at(i: Int, r: Float): Pair<Float, Float> {
+            val a = Math.toRadians(-75.0 + 37.5 * i)
+            val ang = if (side == 0) a else Math.PI - a
+            return (mx + r * dn * Math.cos(ang)).toFloat() to (my + r * dn * Math.sin(ang)).toFloat()
+        }
         val t0 = SystemClock.uptimeMillis()
-        touch(v, MotionEvent.ACTION_DOWN, cx, cy, t0)
+        touch(v, MotionEvent.ACTION_DOWN, bx, by, t0)
         idle(450)
-        val dir = if (side == 0) 1 else -1
-        val d = 110 * ctx.resources.displayMetrics.density
-        touch(v, MotionEvent.ACTION_MOVE, cx + dir * d * 0.97f, cy - d * 0.26f, t0)
         idle(300)
+        at(2, rad).let { (x, y) -> touch(v, MotionEvent.ACTION_MOVE, x, y, t0) }
+        idle(400)
         capture("$prefix-radial")
-        touch(v, MotionEvent.ACTION_UP, cx, cy, t0)
+        at(0, rad).let { (x, y) -> touch(v, MotionEvent.ACTION_MOVE, x, y, t0) }
         idle(300)
+        // 第二圈竖排在内圈外侧，以“最近”的高度为中心：伸到那一列上
+        touch(v, MotionEvent.ACTION_MOVE, mx + (if (side == 0) 1 else -1) * (rad + 120) * dn, my + rad * dn * Math.sin(Math.toRadians(-75.0)).toFloat() + 44 * dn, t0)
+        idle(300)
+        capture("$prefix-radial-recent")
+        touch(v, MotionEvent.ACTION_UP, bx + 2000, by, t0)
+        idle(400)
+        capture("$prefix-after")
         rule.runOnUiThread { c.destroy() }
     }
 

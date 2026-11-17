@@ -4,12 +4,7 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
 import android.graphics.PixelFormat
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffColorFilter
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -21,14 +16,15 @@ import android.view.WindowManager
 import android.view.animation.OvershootInterpolator
 import android.widget.FrameLayout
 import android.widget.Toast
+import com.mistpeaklab.clipdock.ClipItem
 import com.mistpeaklab.clipdock.ClipService
-import com.mistpeaklab.clipdock.Feature
-import com.mistpeaklab.clipdock.Features
+import com.mistpeaklab.clipdock.ClipStore
+import com.mistpeaklab.clipdock.MODE_DEFAULT
+import com.mistpeaklab.clipdock.Unlock
 import com.mistpeaklab.clipdock.MainActivity
 import com.mistpeaklab.clipdock.PanelHost
 import com.mistpeaklab.clipdock.Prefs
 import com.mistpeaklab.clipdock.R
-import com.mistpeaklab.clipdock.data.Vault
 import com.mistpeaklab.clipdock.tr
 import java.util.Calendar
 import kotlin.math.hypot
@@ -178,7 +174,7 @@ internal class FloatController(private val host: Context, private val type: Int)
     private var destroyed = false
 
     private val sprite: SpriteView? = if (mascot) SpriteView(host) else null
-    private val icon: View? = if (mascot) null else BallIcon(host)
+    private val icon: View? = if (mascot) null else BallIconView(host)
 
     private val root = object : FrameLayout(host) {
         override fun onTouchEvent(e: MotionEvent): Boolean = touch(e)
@@ -222,7 +218,7 @@ internal class FloatController(private val host: Context, private val type: Int)
         destroyed = true
         main.removeCallbacksAndMessages(null)
         snapAnim?.cancel()
-        radial?.close()
+        radial?.dismissNow()
         runCatching { wm.removeViewImmediate(root) }
     }
 
@@ -373,7 +369,7 @@ internal class FloatController(private val host: Context, private val type: Int)
             }
             MotionEvent.ACTION_CANCEL -> {
                 main.removeCallbacks(longRun)
-                radial?.close()
+                radial?.close(Mascot.LAND, null)
                 if (dragging) { dragging = false; snap() } else scheduleDock()
             }
         }
@@ -419,52 +415,63 @@ internal class FloatController(private val host: Context, private val type: Int)
     private fun openRadial() {
         if (dragging || destroyed) return
         val o = screenPos(root, lp)
-        val m = RadialMenu(host, wm, type, o[0] + size / 2f, o[1] + size / 2f, side == 0, radialItems()) {
-            radial = null
-            scheduleDock()
+        val m = RadialMenu(
+            host, wm, type, o[0].toFloat(), o[1].toFloat(), size, side == 0,
+            if (sprite != null) base() else null, radialItems(),
+        ) { reaction, then -> onRadialClosed(reaction, then) }
+        if (!m.show()) return
+        radial = m
+        // 控制台里那只卡卡就是她本人：悬浮球窗口先藏起来，菜单收起后再出现
+        root.alpha = 0f
+        main.removeCallbacks(peekRun)
+        sprite?.pause()
+    }
+
+    private fun onRadialClosed(reaction: Mascot?, then: (() -> Unit)?) {
+        radial = null
+        if (destroyed) return
+        place()
+        when {
+            sprite == null -> if (reaction != null) pulse()
+            reaction != null && !(prefs.capturePaused && reaction != Mascot.SHY) -> playOnce(reaction)
+            else -> playBase()
         }
-        if (m.show()) radial = m
+        then?.invoke()
+        scheduleDock()
+    }
+
+    /** 第二圈的内容：开头几个字；隐藏的条目只显示锁，贴之前先验证身份 */
+    private fun entries(list: List<ClipItem>): List<SubEntry> = list.take(5).map { item ->
+        val label = if (item.hidden) tr("🔒 隐藏内容", "🔒 Hidden") else item.preview.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+        SubEntry(label) {
+            if (item.hidden) Unlock.run(host) { ClipStore.plain(item)?.let { PanelHost.deliver(host, it, MODE_DEFAULT) } }
+            else PanelHost.deliver(host, item.text, MODE_DEFAULT)
+        }
     }
 
     private fun radialItems(): List<RadialItem> {
         val paused = prefs.capturePaused
-        val list = mutableListOf(
-            RadialItem(R.drawable.ic_gen_copy, tr("打开面板", "Panel")) { if (!PanelHost.isShowing) PanelHost.show(host) },
-            RadialItem(R.drawable.ic_gen_history, if (paused) tr("恢复记录", "Resume") else tr("暂停记录", "Pause")) {
+        return listOf(
+            RadialItem(R.drawable.ic_gen_history, tr("最近", "Recent"), children = {
+                entries(ClipStore.history().sortedByDescending { it.time })
+            }),
+            RadialItem(R.drawable.ic_gen_star, tr("收藏", "Starred"), children = { entries(ClipStore.favorites()) }),
+            RadialItem(R.drawable.ic_gen_queue, if (paused) tr("恢复记录", "Resume") else tr("暂停记录", "Pause"),
+                reaction = if (paused) Mascot.WAVE else null) {
                 prefs.capturePaused = !paused
                 Toast.makeText(host, if (paused) tr("已恢复记录", "Recording resumed") else tr("已暂停记录，复制的内容不会记下来", "Recording paused"), Toast.LENGTH_SHORT).show()
                 refreshBase()
             },
+            RadialItem(R.drawable.ic_gen_close, tr("今日隐藏", "Hide today"), reaction = Mascot.WAVE) {
+                // 先招手告别，再消失
+                main.postDelayed({
+                    Toast.makeText(host, tr("卡卡今天先不出现了，明天自动回来；也可以在随贴设置里恢复", "Hidden until tomorrow. You can bring it back in settings."), Toast.LENGTH_LONG).show()
+                    FloatBall.hideToday(host)
+                }, 1100)
+            },
+            RadialItem(R.drawable.ic_gen_open, tr("打开随贴", "Open app"), reaction = Mascot.HAPPY) {
+                host.startActivity(Intent(host, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            },
         )
-        if (Features.isOn(host, Feature.HIDE)) list += RadialItem(R.drawable.ic_gen_lock, tr("锁定隐藏", "Lock")) {
-            Vault.lock()
-            Toast.makeText(host, tr("隐藏的内容已锁定", "Hidden items locked"), Toast.LENGTH_SHORT).show()
-        }
-        list += RadialItem(R.drawable.ic_gen_close, tr("今日隐藏", "Hide today")) {
-            Toast.makeText(host, tr("悬浮球今天先不出现了，明天自动回来；也可以在随贴设置里恢复", "Hidden until tomorrow. You can bring it back in settings."), Toast.LENGTH_LONG).show()
-            FloatBall.hideToday(host)
-        }
-        list += RadialItem(R.drawable.ic_gen_open, tr("打开随贴", "Open app")) {
-            host.startActivity(Intent(host, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }
-        return list
-    }
-}
-
-/** 圆形图标样式：品牌蓝圆底 + 白色剪贴板图标 */
-private class BallIcon(ctx: Context) : View(ctx) {
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = RadialMenu.ACCENT }
-    private val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 2 * ctx.resources.displayMetrics.density }
-    private val glyph = ctx.getDrawable(R.drawable.ic_gen_copy)?.mutate()?.apply { colorFilter = PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN) }
-
-    override fun onDraw(c: Canvas) {
-        val r = minOf(width, height) / 2f - edge.strokeWidth
-        c.drawCircle(width / 2f, height / 2f, r, fill)
-        c.drawCircle(width / 2f, height / 2f, r, edge)
-        glyph?.let {
-            val s = (r * 1.1f).toInt()
-            it.setBounds(width / 2 - s / 2, height / 2 - s / 2, width / 2 + s / 2, height / 2 + s / 2)
-            it.draw(c)
-        }
     }
 }
