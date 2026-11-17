@@ -7,7 +7,7 @@
 **给接了键盘的安卓平板，补上它一直缺的那个 Win + V。**
 
 一款面向 **Android 平板 + 实体键盘** 的悬浮剪贴板历史管理器（Clipboard Manager）<br>
-后台自动记录复制内容 · 快捷键唤起悬浮面板 · 多选合并粘贴 · 拆开挑选部分粘贴 · 拼音搜索 · 完全离线
+后台自动记录 · 快捷键唤起悬浮面板 · 多选合并粘贴 · 拆开挑选 · 变换后粘贴 · 拼音搜索 · 完全离线
 
 ![Android](https://img.shields.io/badge/Android-14%2B-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?logo=kotlin&logoColor=white)
@@ -16,7 +16,7 @@
 ![License](https://img.shields.io/badge/License-MIT-blue)
 [![Build](https://github.com/MistPeakLab/ClipDock/actions/workflows/build.yml/badge.svg)](https://github.com/MistPeakLab/ClipDock/actions/workflows/build.yml)
 
-[简体中文](#故事是这样的) · [English](#english)
+[下载最新版](https://github.com/MistPeakLab/ClipDock/releases/latest) · [更新记录](CHANGELOG.md) · [English](#english)
 
 <img src="docs/poster.jpg" width="820" alt="随贴 ClipDock 海报">
 
@@ -40,57 +40,83 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 
 ---
 
-## 两个快捷键就够了
+## 悬浮面板：两个快捷键就够了
 
 <p align="center"><img src="docs/screenshots/shortcut-open.jpg" width="820" alt="Win + V 唤出面板"></p>
 
 <p align="center"><img src="docs/screenshots/shortcut-multi.jpg" width="820" alt="Ctrl + A / Ctrl + V 多选粘贴"></p>
 
----
+### 长长一段，只贴你要的那几个字
 
-## 长长一段，只贴你要的那几个字
+复制了一整条快递短信，其实只想要运单号？在面板里按 `→`，这一条会**展开成全文**，像在 Word 里一样自由选择：拖动、双击选词、三击选段，`Ctrl + 拖动` 还能加选不相连的几段。按 `Enter`，就只贴选中的部分。
 
-复制了一整条快递短信，其实只想要运单号；复制了一段会议纪要，其实只想要那个邮箱。
-以前只能整段贴进去，再一点点删。
-
-现在在面板里选中那一条，按 `→`（或点卡片上的 ✂），它会**展开成全文**，像在 Word 里一样**自由选择**：拖到哪选到哪，双击选词，三击选段。选中的文字会托起成一张小卡片，按 `Enter`，就只把这几个字贴进去。
+想先处理一下再贴，就点“变换”：去换行、改大小写、中英文之间加空格、提取数字 / 链接 / 邮箱……没效果的会变灰，提取类直接显示找到几个。原记录不动。
 
 <table>
 <tr>
-<td width="50%"><img src="docs/screenshots/pick-mouse.jpg" alt="鼠标双击选中网址"></td>
-<td width="50%"><img src="docs/screenshots/pick-touch.jpg" alt="触屏长按选择，拖动手柄调整"></td>
+<td width="50%" valign="top"><img src="docs/screenshots/panel-pick.png" alt="拆开挑选：选中不相连的几段"></td>
+<td width="50%" valign="top"><img src="docs/screenshots/panel-transform.png" alt="变换后粘贴"></td>
 </tr>
 <tr>
-<td align="center"><b>鼠标：双击选词</b><br>网址、邮箱、电话、单号会被整块识别，一下就选中</td>
-<td align="center"><b>触屏：长按选择</b><br>两端出现手柄，拖动调整范围，跨行也能选</td>
+<td align="center"><b>拆开挑选</b><br>网址、邮箱、电话、单号双击整块选中；触屏长按后拖手柄</td>
+<td align="center"><b>变换后粘贴</b><br>19 种分 5 组，<code>Tab</code> 换组，<code>←</code> <code>→</code> 换一种，下方实时预览</td>
 </tr>
 </table>
 
+<p align="center"><sub>以上都是平板上的实机截图（深色主题）。粘贴的那一刻，内容会变成一张小卡片飞进输入框的光标，不喜欢可以在设置里关掉。</sub></p>
+
+<details>
+<summary><b>面板快捷键一览</b></summary>
+
+| 按键 | 作用 |
+|---|---|
+| `Win + V` | 唤出 / 收起面板（可改成任意组合键） |
+| 直接打字 | 搜索（拼音、首字母都行；要打中文就点一下搜索框） |
+| `↑` `↓` `Enter` / 点击 | 选择并粘贴 |
+| `1` – `9` | 快速粘贴第几条（未搜索时） |
+| `Tab` | 切换“最近 / 收藏” |
+| `→` | 拆开挑选 |
+| `Ctrl + A` | 全选 |
+| `Ctrl + 点击` / 长按 | 加选 / 取消 |
+| `Shift + 点击` / `Shift + ↑↓` | 连续选择一段 |
+| `Ctrl + V` | 粘贴到输入框；选了多条就按列表顺序合并成一段 |
+| `Ctrl + C` | 只复制，不粘贴 |
+| `Ctrl + P` / `Delete` | 置顶 / 删除 |
+| `Ctrl + Z` | 撤销刚删除的内容（删除后 5 秒内也可点屏幕上方的小条） |
+| `Esc` | 取消选择 → 清空搜索 → 关闭 |
+
+快捷键和电脑上的习惯一致：`Ctrl+V` 是“贴进去”，`Ctrl+C` 是“拿走”。增强模式下内容会直接粘进当前输入框，不用关掉面板再按一次。
+
+</details>
+
+<details>
+<summary><b>拆开挑选的全部操作</b></summary>
+
 | 操作 | 鼠标 / 触屏 | 键盘 |
 |---|---|---|
-| 展开一条 | 点卡片上的 ✂ | `→` |
+| 展开一条 | 点这一行的 ⛶ | `→` |
 | 放光标 / 自由选择 | 单击 / 拖动；触屏长按后拖动、拖手柄 | `←` `→` 逐字，`↑` `↓` 逐行，加 `Shift` 扩选 |
 | 选词 / 选段 | 双击 / 三击（双击后接着拖，按词扩展） | `Ctrl + Shift + ←→` 按词扩选 |
 | 行首行尾 / 全文首尾 | — | `Home` `End` / `Ctrl + Home` `Ctrl + End` |
 | 加选不相连的几段 | `Ctrl + 拖动`；`Ctrl + 单击` 加选一句 | — |
 | 全选 | 右上角“全选” | `Ctrl + A` |
 | 粘贴 / 只复制 | 底部按钮 | `Enter` 或 `Ctrl + V` / `Ctrl + C` |
-| 返回列表 | “← 返回” | `Esc`（先取消选择，再按一次返回）/ `Backspace` |
+| 返回列表 | “返回” | `Esc`（先取消选择，再按一次返回）/ `Backspace` |
 
-不相连的几段会按原文顺序拼起来：原文中间隔着换行就换行，隔着空格就空一格。
+不相连的几段按原文顺序拼起来：原文中间隔着换行就换行，隔着空格就空一格。
 
-粘贴的那一刻，选中的内容会变成一张小卡片，沿弧线**飞进输入框的光标**，落地时泛起一圈涟漪；多选时几张卡片先叠成一摞再飞过去。不喜欢可以在设置里关掉“粘贴动画”。
+</details>
 
 ---
 
-## 长这样
+## 主界面
 
 浅色、深色跟随系统，也可以在 **我的 › 外观与语言** 里固定一种。
 
 <table>
 <tr>
-<td width="50%"><img src="docs/screenshots/home.jpg" alt="记录页：聚拢视图（浅色）"></td>
-<td width="50%"><img src="docs/screenshots/home-dark.jpg" alt="记录页：聚拢视图（深色）"></td>
+<td width="50%"><img src="docs/screenshots/home.jpg" alt="记录页（浅色）"></td>
+<td width="50%"><img src="docs/screenshots/home-dark.jpg" alt="记录页（深色）"></td>
 </tr>
 <tr>
 <td align="center" colspan="2"><b>记录 / 收藏 / 我的</b>　卡片墙一眼扫过去；顶部按「今天 / 链接 / 类型 / 来源」筛选，拼音也能搜</td>
@@ -108,160 +134,94 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 <td width="50%"><img src="docs/screenshots/detail-dark.jpg" alt="详情视图（深色）"></td>
 </tr>
 <tr>
-<td align="center" colspan="2"><b>详情视图</b>　左边列表、右边全文，适合看长文；全文可以直接选中一部分复制。右上角和卡片墙来回切换</td>
+<td align="center" colspan="2"><b>详情视图</b>　左边列表、右边全文，适合看长文；全文可以直接选中一部分复制</td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/screenshots/panel.jpg" alt="悬浮面板"></td>
 <td width="50%"><img src="docs/screenshots/item-menu.jpg" alt="更多菜单"></td>
-</tr>
-<tr>
-<td align="center"><b>悬浮面板</b><br>Win + V 唤出，直接打字就搜，1–9 快选；只有选中的那一行露出按钮，底部是快捷键提示</td>
-<td align="center"><b>“更多”菜单</b><br>全部动作分“使用 / 整理”两组，什么都找得到</td>
-</tr>
-<tr>
-<td width="50%"><img src="docs/screenshots/panel-multi.jpg" alt="面板多选"></td>
-<td width="50%"><img src="docs/screenshots/panel-transform.jpg" alt="面板里变换后粘贴"></td>
-</tr>
-<tr>
-<td align="center"><b>多选</b><br>Ctrl + 点击、Shift + ↑↓ 或长按挑几条，底部换成操作条，Ctrl + V 按顺序合并贴进输入框</td>
-<td align="center"><b>变换后粘贴</b><br>在面板里换一页：没效果的变灰，提取类直接显示找到几个，Enter 贴出去</td>
-</tr>
-<tr>
 <td width="50%"><img src="docs/screenshots/modes.jpg" alt="权限与模式"></td>
-<td width="50%"><img src="docs/screenshots/settings.jpg" alt="唤起与面板"></td>
 </tr>
 <tr>
+<td align="center"><b>“更多”菜单</b><br>全部动作分“使用 / 整理”两组，什么都找得到</td>
 <td align="center"><b>权限与模式</b><br>开了几项一目了然，每一项都写清楚开了能做什么</td>
-<td align="center"><b>唤起与面板</b><br>快捷键可录制，关闭方式逐项可选，面板快捷键一张表看完</td>
 </tr>
 </table>
 
-**手机上也能用**：底部导航、两列卡片，详情从底部弹出，悬浮面板是能拖动、能缩放的小窗（第三张：搜 “会”，命中的字标黄）。
+**手机上也能用**：底部导航、两列卡片，详情从底部弹出；悬浮面板是能拖动、能缩放的小窗，不占半屏（第三张：搜“会”，命中的字标黄）。
 
 <p align="center">
-<img src="docs/screenshots/phone-home.jpg" width="24%" alt="手机：记录页（浅色）">
+<img src="docs/screenshots/phone-home.jpg" width="24%" alt="手机：记录页">
 <img src="docs/screenshots/phone-wheel.jpg" width="24%" alt="手机：动作轮">
 <img src="docs/screenshots/phone-panel.jpg" width="24%" alt="手机：悬浮面板">
 <img src="docs/screenshots/phone-detail-dark.jpg" width="24%" alt="手机：详情弹层">
 </p>
 
-<p align="center"><sub>它就是为这种姿势设计的：平板立起来，手留在键盘上。</sub></p>
-
 ---
 
-## 它能做什么
-
-### 记下来
-- 在别的应用里 **Ctrl+C / Ctrl+X**、点了“复制”按钮、弹出“已复制”提示，都会自动记一条
-- 长按菜单里只有图标的“复制”、文字选择工具栏上的“复制”也尽量接住；实在没察觉到的，切换应用或解锁屏幕时再补记一次
-- **不开无障碍也能存**：在任何应用里选中文字，菜单里点 **“存到随贴”**（有的应用收在 ⋮ 里）；或者用“分享”把文字发给随贴
-- 重复的内容不会重复记，而是移到最前面
-- 想长期留着的可以**置顶**，不受条数上限影响，“清空”也不会删掉它
-
-<p align="center"><img src="docs/screenshots/save-to-clipdock.jpg" width="820" alt="选中文字后，菜单里的“存到随贴”"></p>
-
-### 找得到
-- **直接打字就能搜索**：面板弹出后敲几个字母立刻过滤，不用先点搜索框；要打中文就点一下搜索框
-- **拼音搜索**：输入 `kuaidi`、`kdtz` 也能找到“快递通知”；空格分隔多个关键词
-- 记录页顶部按 **今天 / 链接 / 内容类型 / 来源应用** 筛选，配合搜索
-- 每条可以加**备注**，备注也能搜到
-- 当前系统剪贴板里的那一条会标出“当前”
-
-### 贴得快
-| 按键 | 作用 |
-|---|---|
-| `Win + V` | 唤出 / 收起面板（可改成任意组合键） |
-| 直接打字 | 搜索 |
-| `↑` `↓` `Enter` / 点击 | 选择并粘贴 |
-| `1` – `9` | 快速粘贴第几条（未搜索时） |
-| `Tab` | 切换
-| `Ctrl + A` | 全选 |
-| `Ctrl + 点击` / 长按 | 加选 / 取消 |
-| `Shift + 点击` / `Shift + ↑↓` | 连续选择一段 |
-| `Ctrl + V` | 粘贴到输入框，选了多条就按列表顺序合并成一段 |
-| `Ctrl + C` | 只复制，不粘贴 |
-| `Ctrl + P` / `Delete` | 置顶 / 删除 |
-| `Ctrl + Z` | 撤销刚删除的内容（删除后 5 秒内也可点屏幕上方的小条） |
-| `Esc` | 取消选择 → 清空搜索 → 关闭 |
-
-快捷键和电脑上的习惯保持一致：`Ctrl+V` 是“贴进去”，`Ctrl+C` 是“拿走”。增强模式下内容会直接粘进当前输入框，不用关掉面板再按一次。
-
-### 不打扰
-- 面板**不抢输入框焦点，不弹输入法**
-- 标题栏拖动移动，**右下角拖动缩放**，大小和位置都会记住
-- 关闭方式五项独立开关：选中后收起 / Esc / 点空白处 / 再按快捷键 / 切换应用
-
-### 一些小心思
-- **常用语**：邮箱、地址、固定回复放这里，永不过期，可编辑、可排序，面板里按 Tab 就能切过去
-- **粘贴前清理格式**：去掉零宽字符、行尾空格、多余空行，从网页复制的内容终于干净了（不改动原记录）
-- **多条合并**：Ctrl+A 或 Ctrl+点击选几条，Ctrl+V 一次贴进去；分隔可选换行 / 空一行 / 空格 / 直接连接
-- **粘贴动画**：卡片飞进光标，落点泛起涟漪，多选时先叠成一摞；可在设置里关闭
-- **三种唤起方式**：快捷键、桌面图标（可设为直接弹面板）、通知栏快捷开关
-
----
-
-## v0.6：一个更完整的文字中转站
-
-这一版没有换主意，还是只做剪贴板；只是把“收、存、找、贴”四步补全了。
+## 功能一览
 
 **收**
+- 在别的应用里 **Ctrl+C / Ctrl+X**、点了“复制”按钮、弹出“已复制”提示，都会自动记一条；实在没察觉到的，切换应用或解锁屏幕时再补记一次
+- **不开无障碍也能存**：选中文字后在菜单里点 **“存到随贴”**（有的应用收在 ⋮ 里），或者“分享”给随贴
 - **连续收集**：打开后，接下来复制的内容自动合并成一条，适合从多处摘抄
 - **按应用规则**：某些应用里复制的可以设成“不记录”或“自动隐藏”；密码管理器、被系统标记为敏感的内容默认不记录
-- **敏感内容识别**：验证码过一会儿自动清除，银行卡号自动隐藏
+- 重复的内容不会重复记，而是移到最前面
 
 **存**
-- 记录改存**数据库**，上限可设到 9999 条，几千条也不卡；升级时旧记录自动迁过来，原文件留底
-- **回收站**：删除的、超出上限的记录保留 30 天，随时找回；刚删掉时屏幕上方出现 5 秒“撤销”
-- 置顶、常用语、**分组**统一放在“收藏”页管理
-- **导入 / 导出 / 自动备份**：换机、重装都能完整恢复；可以设密码加密，自动备份按天或按周写到你选的文件夹（可以选网盘同步目录）
+- 记录存在本机数据库，上限可设到 9999 条，几千条也不卡
+- 置顶、常用语、**分组**统一放在“收藏”页；置顶的不受条数上限影响，“清空”也不会删
+- **回收站**：删除的、超出上限的记录保留 30 天；刚删掉时屏幕上方有 5 秒“撤销”
+- **导入 / 导出 / 自动备份**：可以设密码加密，自动备份按天或按周写到你选的文件夹（可以选网盘同步目录）
 
 **找**
-- **拼音搜索**：`kuaidi`、`kdtz` 都能找到“快递通知”
-- 按 今天 / 链接 / 类型 / 来源应用 筛选
-- 每条可加备注，备注可搜索
+- 面板弹出后**直接打字就搜**，不用先点搜索框；命中的字会标黄
+- **拼音搜索**：`kuaidi`、`kdtz` 都能找到“快递通知”；空格分隔多个关键词
+- 按 今天 / 链接 / 类型 / 来源应用 筛选；每条可加**备注**，备注也能搜到
 
 **贴**
-- **依次粘贴**：多选几条后，每按一次粘贴自动换到下一条，填表时不用来回切换
-- **粘贴前变换**：去换行、转大小写、全角转半角、去掉网址跟踪参数、提取数字 / 链接 / 邮箱、去重、排序……共 19 种，不改原记录
-- **按行拆分 / 合并**：一列数据拆成多条，配合依次粘贴录入
+- **多条合并**：选几条，`Ctrl+V` 一次贴进去；分隔可选换行 / 空一行 / 空格 / 直接连接
+- **依次粘贴**：多选后每粘贴一次自动换到下一条，填表时不用来回切换
+- **拆开挑选**、**变换后粘贴**（19 种，不改原记录）、**按行拆分 / 合并**
 - **内容类型快捷动作**：网址打开、电话拨号、地址看地图
+- **粘贴前清理格式**：去掉零宽字符、行尾空格、多余空行
 
 **隐私**
-- **隐藏内容**：列表里只显示“已隐藏”，查看或粘贴前要验证指纹 / 锁屏密码；内容在本机加密保存，数据库文件被拷走也看不到
-- 设备没有锁屏密码时，改用应用密码
+- **隐藏内容**：列表里只显示“已隐藏”，查看或粘贴前验证指纹 / 锁屏密码；内容在本机加密保存，没有锁屏密码时改用应用密码
+- **敏感内容识别**：验证码过一会儿自动清除，银行卡号自动隐藏
 - 主界面可以禁止截屏
 
-**用起来更顺**
-- 首次启动有**引导**：选使用方式和“简洁 / 全能”，每一项权限都说清楚开了能做什么
+**不打扰**
+- 面板**不抢输入框焦点，不弹输入法**；拖动移动，右下角缩放，大小和位置都会记住
+- 关闭方式逐项可选：选中后收起 / Esc / 点空白处 / 再按快捷键 / 切换应用
+- 三种唤起方式：快捷键、桌面图标（可设为直接弹面板）、通知栏快捷开关
 - **简洁模式**只留记录、搜索、粘贴、收藏；**全能模式**打开全部功能，也可以逐项开关
-- 手机竖屏：底部导航、单列卡片；悬浮面板也是能拖动、能缩放的小窗，不占半屏
-- **中英文界面**随系统语言切换（设置里也能改）
-- 深色 / 浅色主题
-- **v0.6.1 界面重做**：动作条 / 动作轮分工、变换弹窗、详情视图、设置各页逐页重新设计，图标统一成一套
-- **v0.6.2 悬浮面板重做**：和主界面同一套样式；搜索命中的字（含拼音命中的汉字）标黄；手机上也是悬浮小窗
+- 中英文界面，深色 / 浅色主题
 
-<p align="center">
-<img src="docs/screenshots/features.jpg" width="49%" alt="简洁 / 全能模式和逐项开关">
-<img src="docs/screenshots/backup.jpg" width="49%" alt="备份与导入导出">
-</p>
-<p align="center"><sub><b>简洁 / 全能，一键切换</b>　也可以逐项开关，关掉的功能在面板和菜单里都不出现　·　<b>备份与导入导出</b>　可以设密码，自动备份按天或按周写到你选的文件夹</sub></p>
+<p align="center"><img src="docs/screenshots/save-to-clipdock.jpg" width="560" alt="选中文字后，菜单里的“存到随贴”"></p>
 
 <table>
 <tr>
-<td width="50%"><img src="docs/screenshots/privacy.jpg" alt="隐私：隐藏内容与自动识别"></td>
-<td width="50%"><img src="docs/screenshots/transform.jpg" alt="粘贴前变换"></td>
+<td width="50%"><img src="docs/screenshots/features.jpg" alt="简洁 / 全能模式和逐项开关"></td>
+<td width="50%"><img src="docs/screenshots/settings.jpg" alt="唤起与面板"></td>
 </tr>
 <tr>
-<td align="center"><b>隐藏内容</b><br>加密保存，查看或粘贴前验证指纹 / 锁屏密码</td>
-<td align="center"><b>变换后复制</b><br>19 种分 5 组，先试算：没效果的变灰，提取类直接显示找到几个；不改原记录</td>
+<td align="center"><b>简洁 / 全能</b><br>也可以逐项开关，关掉的功能在面板和菜单里都不出现</td>
+<td align="center"><b>唤起与面板</b><br>快捷键可录制，关闭方式逐项可选</td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/privacy.jpg" alt="隐私：隐藏内容与自动识别"></td>
+<td width="50%"><img src="docs/screenshots/backup.jpg" alt="备份与导入导出"></td>
+</tr>
+<tr>
+<td align="center"><b>隐私</b><br>隐藏内容加密保存，按应用设规则</td>
+<td align="center"><b>备份与导入导出</b><br>可以设密码，自动备份按天或按周</td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/screenshots/paste.jpg" alt="粘贴设置"></td>
 <td width="50%"><img src="docs/screenshots/trash.jpg" alt="回收站"></td>
 </tr>
 <tr>
-<td align="center"><b>粘贴</b><br>直接粘贴、清理格式；多条合并的分隔旁边直接显示合并效果</td>
-<td align="center"><b>回收站</b><br>删除的、超出上限的记录保留 30 天，随时恢复</td>
+<td align="center"><b>粘贴</b><br>多条合并的分隔旁边直接显示合并效果</td>
+<td align="center"><b>回收站</b><br>保留 30 天，随时恢复</td>
 </tr>
 </table>
 
@@ -312,7 +272,7 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 
 ## 安装
 
-1. 到 [Releases](https://github.com/MistPeakLab/ClipDock/releases) 下载最新的 apk，在平板上安装
+1. 到 [Releases](https://github.com/MistPeakLab/ClipDock/releases/latest) 下载最新的 apk，在平板上安装（覆盖安装即可升级，记录不会丢）
 2. 打开随贴，跟着首次引导选使用方式和“简洁 / 全能”，按需开启悬浮窗权限和无障碍服务
 3. 建议同时允许“保持后台运行”，防止系统清理导致快捷键失效
 4. 在别的应用里复制几段文字，按 `Win + V` 试试
@@ -320,68 +280,84 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 > `Win + V` 按了没反应？可能被系统占用了，到 **我的 › 唤起与面板** 换一个快捷键。
 
 **系统要求**：Android 14 及以上（已在 Android 17 平板上实测）。
+
 > **校验安装包**：正式版均使用同一个证书签名，SHA-256 指纹为
 > `64:09:B1:17:63:B5:28:73:2C:9C:DE:FE:E5:8C:58:2B:AD:1B:22:F1:92:F0:94:E8:57:33:94:E7:FF:22:B1:05`
 > 可用 `apksigner verify --print-certs ClipDock-vX.Y.Z.apk` 核对。指纹不一致的安装包不是官方发布的。
 
 ---
 
+## 更新记录
+
+- **v0.6.2**　悬浮面板重做：和主界面同一套样式，搜索命中的字标黄，变换后粘贴改成面板内的一页；手机上也是悬浮小窗
+- **v0.6.1**　主界面重做：动作条 / 动作轮分工、变换弹窗、详情视图，设置各页逐页重新设计
+- **v0.6.0**　改用数据库、回收站、分组、备份、隐藏内容、依次粘贴、变换后粘贴、简洁 / 全能模式、中英文界面
+
+完整内容见 [CHANGELOG.md](CHANGELOG.md)。
+
+---
+
 ## 从源码构建
 
-不需要 Android Studio，命令行工具就够了。
+不需要 Android Studio，命令行工具就够了。每次推送到 `main`，GitHub Actions 都会自动编译一个调试版 apk，可以在 [Actions](https://github.com/MistPeakLab/ClipDock/actions) 页面下载。
 
-```bash
-git clone https://github.com/MistPeakLab/ClipDock.git
-cd ClipDock
-```
-
-每次推送到 `main`，GitHub Actions 都会自动编译一个调试版 apk，可以在 [Actions](https://github.com/MistPeakLab/ClipDock/actions) 页面下载。
-
-**环境**
-- JDK 17
-- Android SDK（platform 36、build-tools 36.0.0、platform-tools）
-- Gradle 由项目自带的 Wrapper 自动下载
+**环境**：JDK 17 · Android SDK（platform 36、build-tools 36.0.0）· Gradle 由项目自带的 Wrapper 自动下载
 
 ```powershell
-# 在 local.properties 中写好 SDK 路径，例如：
-# sdk.dir=E\:\\Android\\sdk
-
+git clone https://github.com/MistPeakLab/ClipDock.git
+cd ClipDock
+# 在 local.properties 中写好 SDK 路径，例如：sdk.dir=E\:\\Android\\sdk
 .\gradlew.bat assembleDebug     # 调试包：app\build\outputs\apk\debug\
 .\gradlew.bat assembleRelease   # 正式包：app\build\outputs\apk\release\
+.\gradlew.bat testDebugUnitTest # 单元测试
 ```
 
-> **正式签名**：在项目根目录放一个 `keystore.properties`（已被 `.gitignore` 排除）：
-> ```
-> storeFile=你的密钥库路径.jks
-> storePassword=…
-> keyAlias=…
-> keyPassword=…
-> ```
-> 没有这个文件时，`assembleRelease` 会自动退回调试签名，方便自己编译测试。
+<details>
+<summary>正式签名与其他说明</summary>
 
-> 项目路径含中文时，Android 构建工具默认会拒绝，`gradle.properties` 里已用 `android.overridePathCheck=true` 关闭这项检查。
+在项目根目录放一个 `keystore.properties`（已被 `.gitignore` 排除）：
 
-**技术栈**：Kotlin · Jetpack Compose（主界面）· 原生 View（悬浮面板）· 无障碍服务 · 零第三方依赖（除 AndroidX）
+```
+storeFile=你的密钥库路径.jks
+storePassword=…
+keyAlias=…
+keyPassword=…
+```
 
-### 代码结构
+没有这个文件时，`assembleRelease` 会自动退回调试签名，方便自己编译测试。
+
+项目路径含中文时，Android 构建工具默认会拒绝，`gradle.properties` 里已用 `android.overridePathCheck=true` 关闭这项检查。
+
+</details>
+
+**技术栈**：Kotlin · Jetpack Compose（主界面）· 原生 View（悬浮面板）· 无障碍服务 · SQLite · 零第三方依赖（除 AndroidX）
+
+<details>
+<summary>代码结构</summary>
 
 ```
 app/src/main/java/com/mistpeaklab/clipdock/
-├── ClipService.kt       无障碍服务：后台记录（触发判断 + 焦点探针）、全局快捷键、自动粘贴
-├── Diag.kt / DiagPage.kt 收录诊断：每次读取的来源与结果
-├── SaveTextActivity.kt  选中文字“存到随贴”、分享到随贴
-├── PanelController.kt   悬浮面板：搜索、标签、多选、拖动、缩放、键盘操作
-├── PiecePicker.kt       拆开挑选：像 Word 一样自由选择文字（自绘选区、光标、手柄）
-├── PasteFly.kt          粘贴动画：卡片飞向输入框光标
-├── PanelHost.kt         按权限档位决定面板怎么显示；剪贴板读写
-├── ClipStore.kt         历史记录与常用语（本地 JSON）、文字清理
-├── Prefs.kt             设置项与快捷键
-├── MainActivity.kt      主界面：侧边栏、卡片网格、权限与模式页
-├── PhrasesPage.kt       常用语管理
-├── SettingsPage.kt      设置页、快捷键录制
-├── LauncherActivity.kt  桌面图标 / 长按快捷方式入口
-└── PanelTileService.kt  通知栏快捷开关
+├── ClipService.kt          无障碍服务：后台记录（触发判断 + 焦点探针）、全局快捷键、自动粘贴
+├── PanelHost.kt            按权限档位决定面板怎么显示；剪贴板读写
+├── PanelController.kt      悬浮面板：列表、搜索、多选、变换页、拖动缩放、键盘操作
+├── PiecePicker.kt          拆开挑选：像 Word 一样自由选择文字（自绘选区、光标、手柄）
+├── PasteFly.kt             粘贴动画：卡片飞向输入框光标
+├── PasteQueue.kt / Undo.kt 依次粘贴、删除后撤销（屏幕上方的小条）
+├── ClipStore.kt            记录、常用语、收藏的读写入口
+├── MainActivity.kt         主界面框架与主题
+├── RecordsPage.kt          记录 / 收藏页：卡片墙、详情视图、动作条、动作轮
+├── TransformDialog.kt      主界面的变换弹窗
+├── SettingsPage.kt / PermissionsPage.kt / PrivacyBackupPages.kt / TrashPage.kt / DiagPage.kt
+├── Features.kt / Prefs.kt  简洁 / 全能与逐项开关；设置项与快捷键
+├── Unlock.kt               隐藏内容的身份验证
+├── AutoBackup.kt           自动备份
+├── SaveTextActivity.kt     选中文字“存到随贴”、分享到随贴
+├── LauncherActivity.kt / PanelTileService.kt  桌面图标入口、通知栏快捷开关
+├── data/                   数据库、加密保险箱、备份格式、旧版数据迁移
+└── util/                   内容识别、拼音、搜索与高亮、19 种文字变换（纯 Kotlin，有单元测试）
 ```
+
+</details>
 
 ---
 
@@ -406,28 +382,22 @@ On Android, `Ctrl + V` only pastes the latest copy. Reaching older items means s
 
 - **Records everything you copy** in the background (via an accessibility service; Android 10+ forbids background clipboard access for normal apps)
 - **`Win + V` (customizable) opens a floating panel** that never steals focus from your text field and never pops up the soft keyboard
-- **Type to search**, `↑ ↓ Enter` or `1–9` to paste, `Tab` for saved snippets
-- **Pinyin search**: type `kuaidi` or `kdtz` to find 快递通知
+- **Type to search** (with Pinyin: `kuaidi` or `kdtz` finds 快递通知), matches highlighted; `↑ ↓ Enter` or `1–9` to paste, `Tab` for favourites
 - **Desktop-style multi-select**: `Ctrl + A`, `Ctrl + click`, `Shift + click`, then `Ctrl + V` pastes them merged, straight into the input field
 - **Paste just part of an item**: press `→` to expand a long item and select freely like in Word, then `Enter` pastes only that part
+- **Transform before pasting**: remove line breaks, change case, space out CJK and Latin text, strip link tracking parameters, extract numbers / links / e-mails and more; the original stays untouched
 - **Paste queue**: select several items and each paste gives you the next one — handy for filling forms
-- **Collect mode**: everything you copy while it is on is joined into one item
-- **Transforms before pasting**: remove line breaks, change case, strip link tracking parameters, extract numbers / links / e-mails and more; the original stays untouched
-- **Content types**: links, phone numbers, e-mails, addresses, tracking numbers and colours get a quick action
-- **Hidden items**: encrypted on this device, revealed only after fingerprint / screen-lock verification; verification is dropped when the screen turns off
-- **Trash** with 30-day recovery and a 5-second undo; **groups**, **notes**, **export / import / automatic encrypted backups**
+- **Collect mode**, **content-type actions**, **hidden items** (encrypted, revealed after fingerprint / screen-lock verification), **trash** with 30-day recovery, **groups**, **notes**, **encrypted backups**
 - **Simple / Full modes**: start with just history, search, paste and favourites, turn on the rest whenever you like
 - **Fully offline**: no `INTERNET` permission, text only, stored locally
 
-Requires Android 14+. The UI is available in Chinese and English, in light and dark themes.
+Requires Android 14+. The UI is available in Chinese and English, in light and dark themes. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ---
 
 ## 开源协议
 
 [MIT](LICENSE) © 2026 MistPeakLab
-
----
 
 ## 🔗 友情链接
 
