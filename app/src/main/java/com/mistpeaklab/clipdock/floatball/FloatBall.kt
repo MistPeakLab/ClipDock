@@ -154,9 +154,13 @@ internal class FloatController(private val host: Context, private val type: Int)
 
     private val mascot = prefs.floatStyle == 1
     private val size = dp(
-        if (mascot) floatArrayOf(64f, 80f, 100f)[prefs.floatSize.coerceIn(0, 2)]
+        // 卡卡默认（中）就是控制台里那么大
+        if (mascot) floatArrayOf(140f, 176f, 220f)[prefs.floatSize.coerceIn(0, 2)]
         else floatArrayOf(44f, 52f, 60f)[prefs.floatSize.coerceIn(0, 2)]
     )
+    /** 收起探头时窗口只留卡卡露出来的那一截，透明的部分不挡住下面应用的点击 */
+    private val peekW = (size * 0.56f).toInt()
+
     private val slop = ViewConfiguration.get(host).scaledTouchSlop
     private val longPress = 400L
 
@@ -226,18 +230,25 @@ internal class FloatController(private val host: Context, private val type: Int)
 
     private fun screen() = wm.currentWindowMetrics.bounds
 
+    /** 收起探头（没在做反应）时窗口收窄 */
+    private fun narrow() = mascot && docked && !reacting && radial == null
+
     private fun edgeX(): Int {
         val b = screen()
+        val w = if (narrow()) peekW else size
         val inset = if (mascot) 0 else if (docked) -size / 2 else dp(4f)
-        return if (side == 0) b.left + inset else b.right - size - inset
+        return if (side == 0) b.left + inset else b.right - w - inset
     }
 
     private fun place() {
         val b = screen()
         val margin = dp(24f)
         lp.y = (b.top + b.height() * prefs.floatY / 1000f - size / 2f).toInt().coerceIn(b.top + margin, b.bottom - size - margin)
+        lp.width = if (narrow()) peekW else size
         lp.x = edgeX()
-        root.alpha = if (docked) prefs.floatAlphaIdle.coerceIn(20, 100) / 100f else 1f
+        // 停在右边、窗口收窄时，探头的那一截在画布右侧：把画面往左挪进窗口
+        sprite?.translationX = if (narrow() && side == 1) -(size - peekW).toFloat() else 0f
+        root.alpha = if (docked && !reacting) prefs.floatAlphaIdle.coerceIn(20, 100) / 100f else 1f
         if (root.isAttachedToWindow) runCatching { wm.updateViewLayout(root, lp) }
     }
 
@@ -303,8 +314,8 @@ internal class FloatController(private val host: Context, private val type: Int)
         val s = sprite ?: return
         main.removeCallbacks(peekRun)
         reacting = true
-        // 收起时做反应：先完整显示出来，做完再淡回去
-        root.alpha = 1f
+        // 收起时做反应：先完整显示出来（窗口放宽、不透明），做完再收回去
+        place()
         s.play(m) {
             reacting = false
             if (!destroyed && !dragging) { place(); playBase() }
@@ -421,7 +432,8 @@ internal class FloatController(private val host: Context, private val type: Int)
         ) { reaction, then -> onRadialClosed(reaction, then) }
         if (!m.show()) return
         radial = m
-        // 控制台里那只卡卡就是她本人：悬浮球窗口先藏起来，菜单收起后再出现
+        // 控制台里那只卡卡就是她本人：悬浮球这边先藏起来，菜单收起后再出现
+        (sprite ?: icon)?.visibility = View.INVISIBLE
         root.alpha = 0f
         main.removeCallbacks(peekRun)
         sprite?.pause()
@@ -430,6 +442,7 @@ internal class FloatController(private val host: Context, private val type: Int)
     private fun onRadialClosed(reaction: Mascot?, then: (() -> Unit)?) {
         radial = null
         if (destroyed) return
+        (sprite ?: icon)?.visibility = View.VISIBLE
         place()
         when {
             sprite == null -> if (reaction != null) pulse()

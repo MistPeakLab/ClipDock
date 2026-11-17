@@ -83,7 +83,7 @@ class FloatShotTest {
         val bx = lp.x + v.width / 2f
         val by = lp.y + v.height / 2f
         val b = rule.activity.windowManager.currentWindowMetrics.bounds
-        val big = maxOf(v.width * 2.2f, 140 * dn).toInt()
+        val big = maxOf(if (style == 1) 176 * dn else 52 * dn, 140 * dn).toInt()
         val rad = (96 * dn + big * 0.22f) / dn
         val mx = if (side == 0) 6 * dn + big / 2f else b.right - 6 * dn - big / 2f
         val my = by.coerceIn(rad * dn * 0.97f + 50 * dn, b.bottom - rad * dn * 0.97f - 50 * dn)

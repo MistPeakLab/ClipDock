@@ -67,8 +67,8 @@ class RadialMenu(
     private val dens = ctx.resources.displayMetrics.density
     private fun dp(v: Float) = v * dens
 
-    /** 控制台里的卡卡是悬浮球的 2.2 倍（至少 140dp），明显大过按钮 */
-    private val big = maxOf(ballSize * 2.2f, dp(140f)).toInt()
+    /** 控制台里的卡卡和悬浮球一样大（圆形图标样式时至少 140dp），明显大过按钮 */
+    private val big = maxOf(ballSize.toFloat(), dp(140f)).toInt()
     private val radius = dp(96f) + big * 0.22f
     private val bubble = dp(26f)
     private val spread = Math.toRadians(if (items.size <= 3) 110.0 else 150.0)
