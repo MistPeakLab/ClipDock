@@ -22,8 +22,8 @@ android {
         applicationId = "com.mistpeaklab.clipdock"
         minSdk = 34
         targetSdk = 36
-        versionCode = 11
-        versionName = "0.6.2"
+        versionCode = 12
+        versionName = "0.7.0-beta1"
     }
 
     signingConfigs {
