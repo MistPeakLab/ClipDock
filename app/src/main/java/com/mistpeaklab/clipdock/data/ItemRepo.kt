@@ -104,9 +104,9 @@ class ItemRepo private constructor(private val helper: Db) {
 
     // ---------------- 读 ----------------
 
-    /** 还在列表里的全部条目 */
+    /** 还在列表里的全部记录和常用语（文库篇章另外读，见 [loadNotes]：篇章很长，不整篇放进内存） */
     fun loadLive(): List<ItemRow> =
-        db.rawQuery("SELECT $COLS FROM items WHERE $LIVE", null).use { c ->
+        db.rawQuery("SELECT $COLS FROM items WHERE $LIVE AND kind<>${ItemKind.LIBRARY}", null).use { c ->
             val out = ArrayList<ItemRow>(c.count)
             while (c.moveToNext()) out += read(c)
             out
@@ -140,7 +140,25 @@ class ItemRepo private constructor(private val helper: Db) {
             cipher = if (c.isNull(20)) null else c.getBlob(20),
             deviceId = c.getString(21),
             hash = c.getString(22),
+            title = c.getString(23),
+            sourceTitle = c.getString(24),
+            sourceAuthor = c.getString(25),
+            sourceUrl = c.getString(26),
         )
+    }
+
+    /** 文库里的全部篇章：只读标题、出处、预览这些，不读正文 */
+    fun loadNotes(): List<NoteRow> = db.rawQuery(
+        "SELECT id, title, group_id, source_title, source_author, source_url, chars, preview, created_at, updated_at, search " +
+            "FROM items WHERE kind=${ItemKind.LIBRARY} AND $LIVE",
+        null,
+    ).use { c ->
+        val out = ArrayList<NoteRow>(c.count)
+        while (c.moveToNext()) out += NoteRow(
+            c.getString(0), c.getString(1) ?: "", c.getString(2), c.getString(3), c.getString(4), c.getString(5),
+            c.getInt(6), c.getString(7), Hlc.millis(c.getLong(8)), Hlc.millis(c.getLong(9)), c.getString(10),
+        )
+        out
     }
 
     /**
@@ -180,13 +198,17 @@ class ItemRepo private constructor(private val helper: Db) {
         cv.put("kind", n.kind)
         cv.put("hash", ItemText.sha256(n.text))
         cv.put("chars", n.text.length)
-        body(cv, n.text, search, n.cipher)
+        body(cv, n.text, search, n.cipher, n.kind)
         cv.put("source_pkg", n.sourcePkg)
         cv.put("group_id", n.groupId)
         cv.put("pinned", if (n.pinned) 1 else 0)
         n.expireAt?.let { cv.put("expire_at", it) }
         n.sortKey?.let { cv.put("sort_key", it) }
         cv.put("note", n.note)
+        cv.put("title", n.title)
+        cv.put("source_title", n.sourceTitle)
+        cv.put("source_author", n.sourceAuthor)
+        cv.put("source_url", n.sourceUrl)
         cv.put("created_at", now)
         cv.put("updated_at", now)
         cv.put("used_at", n.nowMs)
@@ -200,7 +222,7 @@ class ItemRepo private constructor(private val helper: Db) {
      * 正文相关的几列。隐藏的内容（cipher 非空）库里只存密文，不存原文和预览；
      * 这时 search 由调用方给，里面只应该有备注（备注是用户写给自己看的标签，不加密）
      */
-    private fun body(cv: ContentValues, text: String, search: String, cipher: ByteArray?) {
+    private fun body(cv: ContentValues, text: String, search: String, cipher: ByteArray?, kind: Int = ItemKind.CLIP) {
         if (cipher != null) {
             cv.put("hidden", 1)
             cv.put("cipher", cipher)
@@ -212,7 +234,7 @@ class ItemRepo private constructor(private val helper: Db) {
             cv.putNull("cipher")
             cv.put("text", text)
             cv.put("search", search)
-            cv.put("preview", ItemText.preview(text))
+            cv.put("preview", ItemText.preview(text, kind))
         }
     }
 
@@ -237,11 +259,11 @@ class ItemRepo private constructor(private val helper: Db) {
     }
 
     /** 改正文。cipher 非空表示这条是隐藏的 */
-    fun setText(id: String, text: String, search: String, cipher: ByteArray? = null) {
+    fun setText(id: String, text: String, search: String, cipher: ByteArray? = null, kind: Int = ItemKind.CLIP) {
         val cv = ContentValues()
         cv.put("hash", ItemText.sha256(text))
         cv.put("chars", text.length)
-        body(cv, text, search, cipher)
+        body(cv, text, search, cipher, kind)
         update(id, cv)
     }
 
@@ -522,7 +544,11 @@ class ItemRepo private constructor(private val helper: Db) {
         val cipher = if (r.hidden && r.text.length <= HIDE_MAX_CHARS) seal(r.text) else null
         cv.put("hash", ItemText.sha256(r.text))
         cv.put("chars", r.text.length)
-        body(cv, r.text, Search.build(if (cipher != null) "" else Search.head(r.text, SEARCH_CHARS), r.note), cipher)
+        body(cv, r.text, Search.build(if (cipher != null) "" else Search.head(searchSource(r.kind, r.text, r.title, r.sourceTitle, r.sourceAuthor), SEARCH_CHARS), r.note), cipher, r.kind)
+        cv.put("title", r.title)
+        cv.put("source_title", r.sourceTitle)
+        cv.put("source_author", r.sourceAuthor)
+        cv.put("source_url", r.sourceUrl)
         cv.put("source_pkg", r.sourcePkg)
         cv.put("group_id", r.groupId)
         cv.put("pinned", if (r.pinned) 1 else 0)
@@ -607,6 +633,11 @@ class ItemRepo private constructor(private val helper: Db) {
         /** 正文超过这么多字就分段读，每段也是这么多 */
         private const val CHUNK = 100_000
 
+        /** 要放进搜索串的文字：文库篇章把标题、出处放在正文前面，搜标题、书名、作者都能找到 */
+        fun searchSource(kind: Int, text: String, title: String?, sourceTitle: String?, sourceAuthor: String?): String =
+            if (kind != ItemKind.LIBRARY) text
+            else listOfNotNull(title, sourceTitle, sourceAuthor).joinToString(" ") + "\n" + text
+
         /** “还在列表里”的条件 */
         private const val LIVE = "deleted_at IS NULL AND evicted_at IS NULL AND wiped=0"
 
@@ -615,7 +646,8 @@ class ItemRepo private constructor(private val helper: Db) {
         private const val COLS =
             "id, kind, CASE WHEN chars > $CHUNK AND hidden=0 THEN NULL ELSE text END, search, chars, source_pkg, group_id, " +
                 "pinned, hidden, expire_at, sort_key, created_at, updated_at, used_at, use_count, evicted_at, deleted_at, " +
-                "note, wiped, CASE WHEN chars > $CHUNK AND hidden=0 THEN length(text) ELSE 0 END, cipher, device_id, hash"
+                "note, wiped, CASE WHEN chars > $CHUNK AND hidden=0 THEN length(text) ELSE 0 END, cipher, device_id, hash, " +
+                "title, source_title, source_author, source_url"
 
         @Volatile private var instance: ItemRepo? = null
 

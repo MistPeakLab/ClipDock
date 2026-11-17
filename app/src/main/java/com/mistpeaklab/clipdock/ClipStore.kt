@@ -214,7 +214,8 @@ object ClipStore {
                 "记录文件损坏，已经换了一个新的；坏掉的文件留了一份备份。升级前的记录如果还有备份，已经自动补回。",
                 "The history file was damaged and has been replaced; the damaged file was kept. Records from before the upgrade were restored from backup where possible.",
             )
-            LoadResult(list, repo.loadGroups(), repo.loadRules(), notice)
+            // 文库的文集（scope=1）由 LibraryStore 管，这里只要收藏用的分组
+            LoadResult(list, repo.loadGroups().filter { it.scope == 0 }, repo.loadRules(), notice)
         } catch (e: Throwable) {
             Diag.log("DB", null, Diag.ERROR, describe(e))
             LoadResult(
@@ -642,7 +643,7 @@ object ClipStore {
         val r = runCatching { repo().restore(id, now()) }.onFailure { Diag.log("DB", null, Diag.ERROR, describe(it)) }
             .getOrDefault(RestoreResult.Gone)
         main.post {
-            if (r is RestoreResult.Ok) mergeIn(listOf(r.row))
+            if (r is RestoreResult.Ok) { if (r.row.kind == ItemKind.LIBRARY) LibraryStore.reload() else mergeIn(listOf(r.row)) }
             cb(r)
         }
     }
@@ -680,7 +681,7 @@ object ClipStore {
         val have = list.mapTo(HashSet()) { it.id }
         val drop = ArrayList<String>()
         for (r in rows) {
-            if (r.id in have) continue
+            if (r.id in have || r.kind == ItemKind.LIBRARY) continue
             val item = toItem(r)
             // 这中间又记下了同样的内容：留着已有的，这条不要了
             val dup = list.any { it.phrase == item.phrase && if (item.hidden || it.hidden) it.hash == item.hash && it.hash.isNotEmpty() else it.text == item.text }
@@ -725,13 +726,14 @@ object ClipStore {
             val stats = app!!.contentResolver.openInputStream(uri)!!.use { Backup.import(repo, it, password, replace) { t -> Vault.seal(t) } }
             stats
         }
-        val reload = if (r.isSuccess) runCatching { repo().loadLive().map(::toItem) to repo().loadGroups() }.getOrNull() else null
+        val reload = if (r.isSuccess) runCatching { repo().loadLive().map(::toItem) to repo().loadGroups().filter { it.scope == 0 } }.getOrNull() else null
         main.post {
             if (reload != null) synchronized(this) {
                 _groups.value = reload.second
                 if (_collect.value?.id?.let { id -> reload.first.none { it.id == id } } == true) _collect.value = null
                 commit(reload.first, limit())
             }
+            if (r.isSuccess) LibraryStore.reload()
             cb(r)
         }
     }
@@ -795,6 +797,8 @@ object ClipStore {
         }
         _items.value = out
         listeners.toList().forEach { it() }
+        // 桌面小部件、常驻通知跟着刷新（合并成一次，最多 1.5 秒一次）
+        app?.let { Surfaces.poke(it) }
         scheduleExpiry()
     }
 

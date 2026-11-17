@@ -138,6 +138,10 @@ object Backup {
             w.name("evicted").value(r.evictedAt != null)
             w.name("expire_at"); if (r.expireAt == null) w.nullValue() else w.value(r.expireAt)
             w.name("device_id").value(r.deviceId)
+            if (r.kind == ItemKind.LIBRARY) {
+                w.name("title").value(r.title).name("source_title").value(r.sourceTitle)
+                w.name("source_author").value(r.sourceAuthor).name("source_url").value(r.sourceUrl)
+            }
             w.endObject()
             n++
         }
@@ -160,7 +164,11 @@ object Backup {
         for (id in repo.exportIds(false)) {
             val r = repo.get(id) ?: continue
             if (r.hidden) continue
-            w.write(if (r.kind == ItemKind.PHRASE) tr("【常用语】", "[Phrase]") else "[" + day.format(Date(r.usedAt)) + "]")
+            w.write(when (r.kind) {
+                ItemKind.PHRASE -> tr("【常用语】", "[Phrase]")
+                ItemKind.LIBRARY -> tr("【文库】", "[Library] ") + (r.title ?: "")
+                else -> "[" + day.format(Date(r.usedAt)) + "]"
+            })
             if (r.note != null) w.write(" " + r.note)
             w.write("\n")
             w.write(r.text)
@@ -313,6 +321,7 @@ object Backup {
         var src: String? = null; var group: String? = null; var pinned = false; var hidden = false; var note: String? = null
         var sort: Double? = null; var created = 0L; var updated = 0L; var used: Long? = null; var deleted: Long? = null
         var evicted = false; var expire: Long? = null; var device: String? = null
+        var title: String? = null; var srcTitle: String? = null; var srcAuthor: String? = null; var srcUrl: String? = null
         r.beginObject()
         while (r.hasNext()) {
             when (r.nextName()) {
@@ -332,18 +341,22 @@ object Backup {
                 "evicted" -> evicted = r.bool()
                 "expire_at" -> expire = r.long()
                 "device_id" -> device = r.str()
+                "title" -> title = r.str()
+                "source_title" -> srcTitle = r.str()
+                "source_author" -> srcAuthor = r.str()
+                "source_url" -> srcUrl = r.str()
                 else -> r.skipValue()
             }
         }
         r.endObject()
         if (id.isNullOrEmpty() || text.isNullOrBlank()) return null
-        // 这个版本只认记录和常用语；别的类型（以后的文库）先不导入，免得显示成奇怪的东西
-        if (kind != ItemKind.CLIP && kind != ItemKind.PHRASE) return null
+        // 只认记录、常用语和文库篇章；以后版本的新类型先不导入，免得显示成奇怪的东西
+        if (kind != ItemKind.CLIP && kind != ItemKind.PHRASE && kind != ItemKind.LIBRARY) return null
         if (created <= 0) created = Hlc.pack(System.currentTimeMillis())
         if (updated <= 0) updated = created
         return PortItem(
-            id, kind, ItemText.limit(text), src, group, pinned, hidden, note?.takeIf { it.isNotBlank() }, sort, created, updated, used,
-            deleted, evicted, expire, device,
+            id, kind, ItemText.limitFor(kind, text), src, group, pinned, hidden && kind != ItemKind.LIBRARY, note?.takeIf { it.isNotBlank() },
+            sort, created, updated, used, deleted, evicted, expire, device, title, srcTitle, srcAuthor, srcUrl,
         )
     }
 

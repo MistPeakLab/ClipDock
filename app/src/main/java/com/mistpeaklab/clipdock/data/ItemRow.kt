@@ -57,10 +57,30 @@ class ItemRow(
     val cipher: ByteArray?,
     val deviceId: String,
     val hash: String,
+    /** 文库篇章的标题与出处（v0.7）；记录和常用语没有 */
+    val title: String? = null,
+    val sourceTitle: String? = null,
+    val sourceAuthor: String? = null,
+    val sourceUrl: String? = null,
 ) {
     /** 还在列表里：没删除、没被淘汰、正文还在 */
     val live: Boolean get() = deletedAt == null && evictedAt == null && !wiped
 }
+
+/** 文库里的一篇（不带正文）。时间都是毫秒 */
+data class NoteRow(
+    val id: String,
+    val title: String,
+    val shelfId: String?,
+    val sourceTitle: String?,
+    val sourceAuthor: String?,
+    val sourceUrl: String?,
+    val chars: Int,
+    val preview: String,
+    val createdMs: Long,
+    val updatedMs: Long,
+    val search: String,
+)
 
 /** 新增一条时由调用方给出的内容，其余列（hash、时间戳、序号…）由 ItemRepo 填 */
 class NewItem(
@@ -78,6 +98,10 @@ class NewItem(
     val note: String? = null,
     /** 非空 = 这是一条隐藏的内容，这是它加密后的样子 */
     val cipher: ByteArray? = null,
+    val title: String? = null,
+    val sourceTitle: String? = null,
+    val sourceAuthor: String? = null,
+    val sourceUrl: String? = null,
 )
 
 /**
@@ -126,6 +150,10 @@ class PortItem(
     val evicted: Boolean,
     val expireAt: Long?,
     val deviceId: String?,
+    val title: String? = null,
+    val sourceTitle: String? = null,
+    val sourceAuthor: String? = null,
+    val sourceUrl: String? = null,
 )
 
 /** [ItemRepo.importItem] 等的统计 */
@@ -134,6 +162,8 @@ class ImportStats(var added: Int = 0, var updated: Int = 0, var skipped: Int = 0
 object ItemText {
     /** 单条长度上限（字符数）。超过的部分截掉，并在预览里标注 */
     const val MAX_CHARS = 1_000_000
+    /** 文库篇章的长度上限：一本长篇小说也放得下 */
+    const val LIB_MAX_CHARS = 5_000_000
     const val PREVIEW_CHARS = 300
     /** 超长被截断时，预览开头用来提示 */
     val TRUNCATED_MARK: String get() = tr("（内容过长，已截断）", "(truncated) ")
@@ -155,10 +185,15 @@ object ItemText {
     /** 超过 [MAX_CHARS] 的截掉。不会把一个代理对（比如表情符号）从中间切开 */
     fun limit(text: String): String = if (text.length <= MAX_CHARS) text else cut(text, MAX_CHARS)
 
+    /** 文库篇章用的上限 */
+    fun limitLib(text: String): String = if (text.length <= LIB_MAX_CHARS) text else cut(text, LIB_MAX_CHARS)
+
+    fun limitFor(kind: Int, text: String): String = if (kind == ItemKind.LIBRARY) limitLib(text) else limit(text)
+
     /** 列表预览：前 [PREVIEW_CHARS] 个字符，连续的空白（含换行）折叠成一个空格 */
-    fun preview(text: String): String {
+    fun preview(text: String, kind: Int = ItemKind.CLIP): String {
         val sb = StringBuilder(minOf(text.length, PREVIEW_CHARS) + TRUNCATED_MARK.length)
-        if (text.length >= MAX_CHARS) sb.append(TRUNCATED_MARK)
+        if (text.length >= (if (kind == ItemKind.LIBRARY) LIB_MAX_CHARS else MAX_CHARS)) sb.append(TRUNCATED_MARK)
         val max = sb.length + PREVIEW_CHARS
         var space = true   // 开头的空白直接丢掉
         for (c in text) {

@@ -54,6 +54,12 @@ class Prefs(context: Context) {
     init {
         // 第一次以 v0.6+ 运行时判断一次“全新安装 / 从 0.5.x 升级”，结果写进 install_kind，之后不再判断
         if (!sp.contains(K_INSTALL_KIND)) detectInstallKind(context)
+        // 0.7 起文库不再是预留项：之前选了全能模式的人，那时它被记成了“关”，补成“开”，和全能模式一致
+        if (!sp.getBoolean(K_MIG_LIB, false)) {
+            val e = sp.edit().putBoolean(K_MIG_LIB, true)
+            if (sp.getString(K_MODE, null) == Mode.FULL.name) e.putBoolean("feat_library", true)
+            e.apply()
+        }
     }
 
     var hotkey: Hotkey
@@ -165,6 +171,22 @@ class Prefs(context: Context) {
 
     /** 暂停记录：期间所有收录触发一律忽略 */
     var capturePaused by bool("capture_paused", false)
+
+    /** 别的应用全屏（看视频、玩游戏）时把悬浮球藏起来 */
+    var floatHideFullscreen by bool("float_hide_fullscreen", true)
+
+    // ---------- 常驻通知、文库、小部件（0.7） ----------
+
+    /** 常驻通知：通知栏里显示最近 3 条，点一下复制 */
+    var notifEnabled by bool("notif_enabled", false)
+
+    /** 从文库粘贴时在后面附上出处（——《书名》作者） */
+    var libCite by bool("lib_cite", false)
+
+    /** 小部件显示什么：空 = 最近，"fav" = 收藏，"g:<分组 ID>" = 某个分组 */
+    fun widgetSource(id: Int): String = sp.getString("widget_src_$id", "") ?: ""
+    fun setWidgetSource(id: Int, src: String) = sp.edit().putString("widget_src_$id", src).apply()
+    fun dropWidget(id: Int) = sp.edit().remove("widget_src_$id").apply()
 
     // ---------- 首次引导 ----------
 
@@ -312,6 +334,7 @@ class Prefs(context: Context) {
         internal const val FILE = "settings"
         internal const val K_MODE = "feature_mode"
         private const val K_HINT = "new_features_hint"
+        private const val K_MIG_LIB = "mig_070_library"
         private const val K_INSTALL_KIND = "install_kind"
         private const val INSTALL_FRESH = 1
         private const val INSTALL_UPGRADE = 2

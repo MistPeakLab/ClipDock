@@ -19,6 +19,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performTextInput
 import org.junit.Assume
 import org.junit.Before
 import org.junit.Rule
@@ -71,6 +72,29 @@ class ScreenshotTest {
         TestEnv.settle()
         ClipStore.history().firstOrNull { it.text.startsWith("https") }?.let { ClipStore.togglePin(it.id) }
         TestEnv.settle()
+        seedLibrary()
+    }
+
+    private fun seedLibrary() {
+        LibraryStore.init(ctx); TestEnv.settle()
+        val poems = LibraryStore.addShelf("诗词")!!
+        val notes = LibraryStore.addShelf("读书笔记")!!
+        LibraryStore.addShelf("写作素材")
+        LibraryStore.add(
+            "春江潮水连海平，海上明月共潮生。\n滟滟随波千万里，何处春江无月明！\n江流宛转绕芳甸，月照花林皆似霰。\n空里流霜不觉飞，汀上白沙看不见。\n" +
+                "江天一色无纤尘，皎皎空中孤月轮。\n江畔何人初见月？江月何年初照人？\n人生代代无穷已，江月年年望相似。\n不知江月待何人，但见长江送流水。",
+            "春江花月夜", poems, "全唐诗", "张若虚",
+        )
+        TestEnv.tick(60_000)
+        LibraryStore.add(
+            "我们读书，不是为了记住每一个字，而是为了在需要的时候，知道到哪里去找。\n\n" +
+                "好的摘抄应当保留上下文：哪本书、第几章、作者当时在说什么。离开了上下文的句子，很快就会变成一句漂亮的空话。\n\n" +
+                "所以每次摘一段，顺手写下出处，以后引用时才不会张冠李戴。".repeat(3),
+            "关于摘抄的几点想法", notes, "读书笔记", "自己",
+        )
+        TestEnv.tick(60_000)
+        LibraryStore.add("开会时常用的几种回复\n收到，我会在今天下班前整理好发出来。\n这个问题我先确认一下，稍后回复您。\n好的，按这个方案推进，有变化随时同步。", "常用回复模板")
+        TestEnv.settle()
     }
 
     // ---------------- 场景 ----------------
@@ -93,6 +117,17 @@ class ScreenshotTest {
         },
         "favorites" to { text("收藏").performClick(); pause() },
         "me" to { text("我的").performClick(); pause() },
+        "library" to { text("文库").performClick(); pause() },
+        "library-read" to { text("文库").performClick(); pause(); text("春江花月夜").performClick(); pause(800); TestEnv.settle(); pause() },
+        "library-search" to {
+            text("文库").performClick(); pause()
+            rule.onAllNodes(androidx.compose.ui.test.hasSetTextAction()).onFirst().performTextInput("明月"); pause(600); TestEnv.settle(); pause(600)
+        },
+        "panel-lib" to { showPanel(); panelClick { it is TextView && it.text.toString() == "文库" }; pause() },
+        "panel-lib-pick" to {
+            showPanel(); panelClick { it is TextView && it.text.toString() == "文库" }; pause()
+            panelKey(KeyEvent.KEYCODE_DPAD_DOWN); panelKey(KeyEvent.KEYCODE_ENTER); pause()
+        },
         // 悬浮面板（基础模式：悬浮窗权限）
         "panel" to { showPanel() },
         "panel-search" to { showPanel(); panelType("会"); pause() },
@@ -151,6 +186,7 @@ class ScreenshotTest {
         "features" to "逐项设置",
         "panelset" to "快捷键、关闭方式",
         "float" to "看板娘卡卡常驻屏幕边",
+        "notify" to "常驻通知、桌面小部件",
         "paste" to "直接粘贴、清理格式",
         "record" to "保留条数",
         "privacy" to "隐藏内容、不记录的应用",

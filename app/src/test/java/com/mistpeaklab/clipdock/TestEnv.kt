@@ -27,6 +27,7 @@ internal object TestEnv {
     fun restart() {
         settle()
         ClipStore.resetForTest()
+        LibraryStore.resetForTest()
         Db.resetForTest()
         Features.invalidate()
     }

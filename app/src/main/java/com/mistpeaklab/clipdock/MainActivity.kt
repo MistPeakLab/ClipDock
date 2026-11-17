@@ -57,6 +57,8 @@ class MainActivity : ComponentActivity() {
         AutoBackup.runIfDue(this)
         // 悬浮球：刚授予了悬浮窗权限、或者被系统清掉后回到这里，按设置补上
         com.mistpeaklab.clipdock.floatball.FloatBall.sync(this)
+        LibrarySaveActivity.syncAlias(this)
+        ClipWidget.updateAll(this)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -105,11 +107,11 @@ fun AppTheme(content: @Composable () -> Unit) {
 
 // ---------------- 结构 ----------------
 
-/** 三个主区：记录（会过期的）、收藏（长期留着的）、我的（设置等） */
-enum class Tab { Records, Favorites, Me }
+/** 主区：记录（会过期的）、收藏（长期留着的）、文库（长文字，功能打开时才有）、我的（设置等） */
+enum class Tab { Records, Favorites, Library, Me }
 
 /** “我的”下面的子页面 */
-enum class Sub { None, Permissions, Features, Panel, Float, Paste, Record, Privacy, Rules, Backup, Trash, Diag, Look }
+enum class Sub { None, Permissions, Features, Panel, Float, Notify, Paste, Record, Privacy, Rules, Backup, Trash, Diag, Look }
 
 @Composable
 fun AppRoot() {
@@ -128,6 +130,11 @@ fun AppRoot() {
     // 应用刚启动时无障碍服务可能还没连上，稍后再查一次，免得误报“已被系统停止”
     LaunchedEffect(Unit) { delay(2500); tick++ }
     val notice by ClipStore.notice.collectAsStateWithLifecycle()
+    val fv by Features.version.collectAsStateWithLifecycle()
+    val libOn = remember(fv) { Features.isOn(ctx, Feature.LIBRARY) }
+    if (!libOn && tab == Tab.Library) tab = Tab.Records
+    var paused by remember { mutableStateOf(prefs.capturePaused) }
+    LaunchedEffect(tick) { paused = prefs.capturePaused }
     val serviceStopped = remember(tick) { tick > 0 && ClipService.instance == null && ctx.isClipServiceEnabledInSystem() }
     BackHandler(sub != Sub.None || tab != Tab.Records) { if (sub != Sub.None) sub = Sub.None else tab = Tab.Records }
     val open: (Sub) -> Unit = { tab = Tab.Me; sub = it }
@@ -138,10 +145,15 @@ fun AppRoot() {
             Column(Modifier.fillMaxSize()) {
                 if (serviceStopped && sub != Sub.Diag) StoppedBanner { open(Sub.Diag) }
                 notice?.let { NoticeBanner(it) { ClipStore.clearNotice() } }
+                if (paused && sub != Sub.Float) PausedBanner {
+                    prefs.capturePaused = false; paused = false
+                    com.mistpeaklab.clipdock.floatball.FloatBall.refreshState()
+                }
                 Box(Modifier.weight(1f)) {
                     when (tab) {
                         Tab.Records -> RecordsPage(tick) { open(it) }
                         Tab.Favorites -> FavoritesPage()
+                        Tab.Library -> LibraryPage()
                         Tab.Me -> if (sub == Sub.None) MePage(tick, open) else SubPage(sub, tick, open) { sub = Sub.None }
                     }
                 }
@@ -149,13 +161,13 @@ fun AppRoot() {
         }
         if (wide) {
             Row(Modifier.fillMaxSize().systemBarsPadding()) {
-                Sidebar(tab, tick, Modifier.width(232.dp), onOpen = open) { tab = it; sub = Sub.None }
+                Sidebar(tab, tick, libOn, Modifier.width(232.dp), onOpen = open) { tab = it; sub = Sub.None }
                 Box(Modifier.weight(1f)) { content() }
             }
         } else {
             Column(Modifier.fillMaxSize().systemBarsPadding()) {
                 Box(Modifier.weight(1f)) { content() }
-                BottomBar(tab) { tab = it; sub = Sub.None }
+                BottomBar(tab, libOn) { tab = it; sub = Sub.None }
             }
         }
     }
@@ -167,6 +179,7 @@ private fun SubPage(sub: Sub, tick: Int, open: (Sub) -> Unit, onBack: () -> Unit
     Sub.Features -> FeaturesPage(onBack)
     Sub.Panel -> PanelSettingsPage(onBack)
     Sub.Float -> FloatSettingsPage(tick, onBack)
+    Sub.Notify -> NotifySettingsPage(tick, onBack)
     Sub.Paste -> PasteSettingsPage(onBack)
     Sub.Record -> RecordSettingsPage(onBack) { open(Sub.Trash) }
     Sub.Privacy -> PrivacyPage(onBack) { open(Sub.Rules) }
@@ -188,7 +201,7 @@ fun abilityLevel(ctx: android.content.Context) = when {
 // ---------------- 侧边栏 / 底部导航 ----------------
 
 @Composable
-private fun Sidebar(tab: Tab, tick: Int, modifier: Modifier, onOpen: (Sub) -> Unit, onSelect: (Tab) -> Unit) {
+private fun Sidebar(tab: Tab, tick: Int, libOn: Boolean, modifier: Modifier, onOpen: (Sub) -> Unit, onSelect: (Tab) -> Unit) {
     val ctx = LocalContext.current
     val cs = MaterialTheme.colorScheme
     val items by ClipStore.items.collectAsStateWithLifecycle()
@@ -204,6 +217,11 @@ private fun Sidebar(tab: Tab, tick: Int, modifier: Modifier, onOpen: (Sub) -> Un
         }
         NavItem(R.drawable.ic_gen_history, tr("记录", "History"), tab == Tab.Records, counts.first.toString()) { onSelect(Tab.Records) }
         NavItem(R.drawable.ic_gen_star, tr("收藏", "Favorites"), tab == Tab.Favorites, counts.second.toString()) { onSelect(Tab.Favorites) }
+        if (libOn) {
+            val notes by LibraryStore.notes.collectAsStateWithLifecycle()
+            LaunchedEffect(Unit) { LibraryStore.init(ctx) }
+            NavItem(R.drawable.ic_book, tr("文库", "Library"), tab == Tab.Library, notes.size.toString()) { onSelect(Tab.Library) }
+        }
         NavItem(R.drawable.ic_gen_person, tr("我的", "Me"), tab == Tab.Me, null) { onSelect(Tab.Me) }
         Spacer(Modifier.weight(1f))
         val level = remember(tick) { abilityLevel(ctx) }
@@ -229,12 +247,13 @@ private fun NavItem(icon: Int, title: String, selected: Boolean, badge: String?,
 }
 
 @Composable
-private fun BottomBar(tab: Tab, onSelect: (Tab) -> Unit) {
+private fun BottomBar(tab: Tab, libOn: Boolean, onSelect: (Tab) -> Unit) {
     // 外层已经让出了系统栏的位置，这里不要再让一次
     NavigationBar(windowInsets = WindowInsets(0)) {
-        listOf(
+        listOfNotNull(
             Triple(Tab.Records, R.drawable.ic_gen_history, tr("记录", "History")),
             Triple(Tab.Favorites, R.drawable.ic_gen_star, tr("收藏", "Favorites")),
+            if (libOn) Triple(Tab.Library, R.drawable.ic_book, tr("文库", "Library")) else null,
             Triple(Tab.Me, R.drawable.ic_gen_person, tr("我的", "Me")),
         ).forEach { (t, icon, label) ->
             NavigationBarItem(
@@ -279,6 +298,20 @@ private fun NoticeBanner(text: String, onDismiss: () -> Unit) {
     ) {
         Text(text, Modifier.weight(1f), fontSize = 13.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurface)
         TextButton(onClick = onDismiss) { Text(tr("知道了", "OK")) }
+    }
+}
+
+/** 暂停记录中：顶部一条提示，点“恢复”马上恢复 */
+@Composable
+private fun PausedBanner(onResume: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(12.dp))
+            .background(Accent.copy(alpha = 0.12f)).padding(start = 14.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(tr("记录已暂停：现在复制的内容不会记下来", "Recording is paused: nothing you copy is saved"), Modifier.weight(1f),
+            fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+        TextButton(onClick = onResume) { Text(tr("恢复", "Resume")) }
     }
 }
 

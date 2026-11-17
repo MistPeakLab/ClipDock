@@ -302,6 +302,7 @@ class PanelController(
         wm.addView(root, lp)
         shown = true
         ClipStore.addListener(listener)
+        if (on(Feature.LIBRARY)) { LibraryStore.init(ctx); LibraryStore.addListener(listener) }
         buildTabs()
         refresh()
     }
@@ -310,6 +311,7 @@ class PanelController(
         if (!shown) return
         shown = false
         ClipStore.removeListener(listener)
+        LibraryStore.removeListener(listener)
         if (editing) hideIme()
         runCatching { wm.removeView(root) }
         onDismiss()
@@ -452,6 +454,7 @@ class PanelController(
 
     private fun buildTabs() {
         val l = arrayListOf(TabDef("recent", tr("最近", "Recent")), TabDef("fav", tr("收藏", "Favourites")))
+        if (on(Feature.LIBRARY)) l += TabDef("lib", tr("文库", "Library"))
         if (on(Feature.GROUP)) ClipStore.groups.value.forEach { l += TabDef("g:" + it.id, it.name) }
         tabs = l
         tab = prefs.panelTab.coerceIn(0, tabs.lastIndex)
@@ -484,9 +487,25 @@ class PanelController(
         val key = tabs.getOrNull(tab)?.key ?: "recent"
         return when {
             key == "fav" -> ClipStore.favorites()
+            key == "lib" -> libItems()
             key.startsWith("g:") -> key.substring(2).let { gid -> ClipStore.items.value.filter { it.groupId == gid } }
             else -> ClipStore.history()
         }
+    }
+
+    // ---------------- 文库 ----------------
+
+    /** 文库篇章在面板列表里也用 ClipItem 表示：ID 前面加 "lib:"，正文位置放标题（全文要用时再读） */
+    private fun libItems(): List<ClipItem> = LibraryStore.notes.value.map { n ->
+        ClipItem(LIB + n.id, n.title, n.updatedMs, phrase = true, search = n.search)
+    }
+
+    private fun isLib(item: ClipItem) = item.id.startsWith(LIB)
+    private fun noteOf(item: ClipItem) = LibraryStore.find(item.id.removePrefix(LIB))
+
+    /** 把列表里的文库条目换成全文（读数据库） */
+    private fun withFullText(list: List<ClipItem>): List<ClipItem> = list.map { item ->
+        if (!isLib(item)) item else item.copy(text = LibraryStore.text(item.id.removePrefix(LIB)) ?: item.text)
     }
 
     // ---------------- 连续收集 ----------------
@@ -546,6 +565,7 @@ class PanelController(
                 text = when {
                     q.isNotEmpty() -> tr("没有包含“%s”的内容", "Nothing matches “%s”", q)
                     !ClipStore.loaded.value -> tr("正在读取记录…", "Loading…")
+                    tabs.getOrNull(tab)?.key == "lib" -> tr("文库还是空的\n在任意应用里选中文字 › 存进文库，或者在随贴主界面导入", "The library is empty\nSelect text in any app › Save to library, or import in ClipDock")
                     tabs.getOrNull(tab)?.key == "fav" -> tr("还没有收藏\n在主界面给记录点 ☆，或新增常用语", "No favourites yet\nStar an item or add a phrase in ClipDock")
                     tabs.getOrNull(tab)?.key?.startsWith("g:") == true -> tr("这个分组还是空的", "This group is empty")
                     else -> tr("还没有记录\n复制一些文字后会出现在这里", "Nothing yet\nCopied text shows up here")
@@ -621,7 +641,8 @@ class PanelController(
             }
         })
         // 第二行小字：备注、类型、时间、来源应用（相应功能打开时）
-        val meta = buildList {
+        val lib = if (isLib(item)) noteOf(item) else null
+        val meta = if (lib != null) listOfNotNull(sourceLine(lib), charsLabel(lib.chars), timeLabel(lib.updatedMs)) else buildList {
             if (on(Feature.NOTE) && item.note != null) add("✎ " + item.note)
             if (on(Feature.CONTENT_KIND)) add(Kinds.label(kind))
             add(timeLabel(item.time))
@@ -641,7 +662,7 @@ class PanelController(
 
         // 行内按钮：只在光标行（或鼠标悬停的行）露出；多选时都不露
         val acts = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        if (!item.hidden && item.preview.length >= 12) {
+        if (!item.hidden && (item.preview.length >= 12 || isLib(item))) {
             acts.addView(iconButton(R.drawable.ic_gen_pick, tr("拆开挑选（→）", "Pick part (→)"), small = true) { selected = index; openPicker(item) })
         }
         if (!item.phrase) {
@@ -677,6 +698,7 @@ class PanelController(
         val color = if (!item.hidden && kind == ContentKind.COLOR) runCatching { Color.parseColor(item.text.trim()) }.getOrNull() else null
         val (icon, tint) = when {
             item.hidden -> R.drawable.ic_gen_lock to cSub
+            isLib(item) -> R.drawable.ic_book to cAccent
             kind == ContentKind.URL -> R.drawable.ic_kind_link to cAccent
             kind == ContentKind.EMAIL -> R.drawable.ic_kind_at to cAccent
             kind == ContentKind.PHONE -> R.drawable.ic_kind_phone to cOk
@@ -769,11 +791,22 @@ class PanelController(
 
     private fun showRowMenu(anchor: View, index: Int, item: ClipItem) {
         selected = index
+        if (isLib(item)) {
+            showMenu(anchor, listOf(
+                MenuEntry(tr("拆开挑选", "Pick a part"), R.drawable.ic_gen_pick) { openPicker(item) },
+                MenuEntry(tr("粘贴全文", "Paste all"), R.drawable.ic_paste) { actOn(listOf(item), MODE_PASTE) },
+                MenuEntry(tr("复制全文", "Copy all"), R.drawable.ic_gen_copy) { actOn(listOf(item), MODE_COPY) },
+            ))
+            return
+        }
         showMenu(anchor, buildList {
             add(MenuEntry(tr("粘贴", "Paste"), R.drawable.ic_paste) { actOn(listOf(item), MODE_PASTE) })
             add(MenuEntry(tr("复制", "Copy"), R.drawable.ic_gen_copy) { actOn(listOf(item), MODE_COPY) })
             if (on(Feature.TRANSFORM) && !item.hidden) add(MenuEntry(tr("变换后粘贴…", "Transform & paste…"), R.drawable.ic_gen_transform) { openTransform(listOf(item)) })
             add(MenuEntry(tr("多选", "Select"), R.drawable.ic_gen_check) { togglePick(index) })
+            if (on(Feature.LIBRARY) && !item.hidden) add(MenuEntry(tr("存进文库…", "Save to library…"), R.drawable.ic_book) {
+                dismiss(); LibrarySaveActivity.open(ctx, item.text)
+            })
             if (!item.phrase) add(MenuEntry(tr("删除", "Delete"), R.drawable.ic_gen_trash, danger = true) { deleteWithUndo(listOf(item.id)) })
         })
     }
@@ -790,12 +823,13 @@ class PanelController(
             shift -> selectRange(index)
             // 已经在多选时，点一下就是加选 / 取消，免得手机上一点就把选好的全贴出去
             picked.isNotEmpty() -> togglePick(index)
-            else -> items.getOrNull(index)?.let { selected = index; actOn(listOf(it), MODE_DEFAULT) }
+            else -> items.getOrNull(index)?.let { selected = index; if (isLib(it)) openPicker(it) else actOn(listOf(it), MODE_DEFAULT) }
         }
     }
 
     private fun togglePick(index: Int) {
         val item = items.getOrNull(index) ?: return
+        if (isLib(item)) return
         if (!picked.remove(item.id)) picked += item.id
         anchor = index; selected = index
         refresh()
@@ -824,8 +858,11 @@ class PanelController(
      * 对几条做“粘贴 / 复制”。里面有隐藏的内容时先收起面板去验证身份，验证完再贴：
      * 验证界面会把焦点从输入框拿走，面板留着也没用。
      */
-    private fun actOn(list: List<ClipItem>, mode: Int) {
-        if (list.isEmpty()) return
+    private fun actOn(src: List<ClipItem>, mode: Int) {
+        if (src.isEmpty()) return
+        // 文库：Enter / 点一下 = 打开拆开挑选；粘贴、复制全文时换成全文
+        if (src.size == 1 && isLib(src[0]) && mode == MODE_DEFAULT) { openPicker(src[0]); return }
+        val list = withFullText(src)
         val ids = list.mapTo(HashSet()) { it.id }
         val clicked = items.getOrNull(selected)?.id
         if (list.any { it.hidden }) {
@@ -1255,6 +1292,13 @@ class PanelController(
             background = round(cField, dp(14).toFloat())
         }
         pickBox.addView(pickScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(4); bottomMargin = dp(8) })
+        // 文库长文：分块翻页（上一块 / 第 i/N 块 / 下一块）
+        pickNav = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; visibility = View.GONE }
+        pickNav.addView(pill(tr("‹ 上一块", "‹ Prev")) { flipChunk(-1) }.apply { (layoutParams as LinearLayout.LayoutParams).marginStart = 0 })
+        pickNavLabel = TextView(ctx).apply { setTextColor(cSub); textSize = 12.5f; gravity = Gravity.CENTER; maxLines = 1 }
+        pickNav.addView(pickNavLabel, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        pickNav.addView(pill(tr("下一块 ›", "Next ›")) { flipChunk(1) })
+        pickBox.addView(pickNav, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) })
         val foot = bottomBar()
         val bottom = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -1269,11 +1313,45 @@ class PanelController(
         panel.addView(pickBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
     }
 
+    private lateinit var pickNav: LinearLayout
+    private lateinit var pickNavLabel: TextView
+    /** 正在拆开的是文库里的哪一篇（null = 普通记录） */
+    private var pickNote: com.mistpeaklab.clipdock.data.NoteRow? = null
+    private var pickFull: String = ""
+    private var pickChunks: List<IntRange> = emptyList()
+    private var pickIdx = 0
+
     private fun openPicker(item: ClipItem) {
         if (item.hidden) return
         if (editing) stopEditing()
+        if (isLib(item)) {
+            val n = noteOf(item) ?: return
+            val t = LibraryStore.text(n.id)
+            if (t.isNullOrEmpty()) { Toast.makeText(ctx, tr("这篇读不出来了", "Could not read this text"), Toast.LENGTH_SHORT).show(); return }
+            pickNote = n; pickFull = t
+            pickChunks = if (t.length > PICK_WHOLE) com.mistpeaklab.clipdock.util.Chunks.split(t, PICK_CHUNK) else listOf(t.indices)
+            pickIdx = 0
+            showPicker(chunkText())
+            return
+        }
+        pickNote = null; pickChunks = emptyList()
+        showPicker(item.text)
+    }
+
+    private fun chunkText(): String = pickChunks.getOrNull(pickIdx)?.let { pickFull.substring(it.first, it.last + 1) } ?: pickFull
+
+    private fun flipChunk(d: Int) {
+        val j = pickIdx + d
+        if (j !in pickChunks.indices) return
+        pickIdx = j
+        showPicker(chunkText())
+    }
+
+    private fun showPicker(text: String) {
+        pickNav.visibility = if (pickChunks.size > 1) View.VISIBLE else View.GONE
+        pickNavLabel.text = tr("第 %d / %d 块", "Part %d of %d", pickIdx + 1, pickChunks.size)
         val pk = PiecePicker(
-            ctx, item.text, cAccent, cPanel,
+            ctx, text, cAccent, cPanel,
             mods = { (if (ctrlHeld) KeyEvent.META_CTRL_ON else 0) or (if (shiftHeld) KeyEvent.META_SHIFT_ON else 0) },
             onChange = { updatePickUi() },
         ).apply {
@@ -1293,6 +1371,7 @@ class PanelController(
     private fun closePicker() {
         if (picker == null) return
         picker = null
+        pickNote = null; pickFull = ""; pickChunks = emptyList()
         pickScroll.removeAllViews()
         showPage(null)
         refresh()
@@ -1313,8 +1392,10 @@ class PanelController(
     private fun actPiece(mode: Int) {
         val pk = picker ?: return
         if (!pk.hasPick()) { pickHint = tr("先选中要粘贴的文字（Ctrl+A 全选）", "Select the text to paste first (Ctrl+A selects all)"); updatePickUi(); return }
-        val text = pk.result()
-        if (text.isBlank()) return
+        val sel = pk.result()
+        if (sel.isBlank()) return
+        // 文库：设置里开了“附带出处”就在后面加一行出处
+        val text = pickNote?.takeIf { prefs.libCite }?.let { citation(it) }?.let { sel + "\n" + it } ?: sel
         onAct(text, mode) {
             val bmp = pk.chip(text, cPanel, cAccent, cText, maxW = pk.width.coerceAtLeast(dp(120)))
             if (bmp == null) emptyList() else {
@@ -1481,6 +1562,13 @@ class PanelController(
             layoutParams = LinearLayout.LayoutParams(s, s)
         }
 }
+
+/** 面板列表里文库条目 ID 的前缀 */
+private const val LIB = "lib:"
+
+/** 文库长文在“拆开挑选”里分块显示：超过这么多字才分块，每块最多 [PICK_CHUNK] 字 */
+private const val PICK_WHOLE = 12_000
+private const val PICK_CHUNK = 4_000
 
 /** 动作：0 按设置（直接粘贴或只复制） 1 直接粘贴 2 只复制 */
 const val MODE_DEFAULT = 0

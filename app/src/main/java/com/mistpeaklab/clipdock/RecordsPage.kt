@@ -1125,6 +1125,7 @@ private sealed interface MenuState {
     data object Note : MenuState
     data object Group : MenuState
     data class Transform(val text: String) : MenuState
+    data class Library(val text: String) : MenuState
 }
 
 /** 条目的 ⋮ 菜单：按功能开关列出能做的事 */
@@ -1148,6 +1149,7 @@ private fun ItemMenu(item: ClipItem, onDismiss: () -> Unit) {
                     ctx.toast(if (ClipStore.addPhrase(item.text)) tr("已加入常用语", "Added to phrases") else tr("常用语里已有这条", "Already a phrase"))
                     onDismiss()
                 })
+                if (on(Feature.LIBRARY) && !item.hidden) add(MenuRow(R.drawable.ic_book, tr("存进文库", "Save to library")) { state = MenuState.Library(item.text) })
                 if (on(Feature.NOTE)) add(MenuRow(R.drawable.ic_gen_note, if (item.note == null) tr("加备注", "Add note") else tr("改备注", "Edit note")) { state = MenuState.Note })
                 if (on(Feature.GROUP)) add(MenuRow(R.drawable.ic_gen_folder, tr("移到分组…", "Move to group…")) { state = MenuState.Group })
                 if (on(Feature.SPLIT_MERGE) && !item.phrase && !item.hidden && item.text.contains('\n')) add(MenuRow(R.drawable.ic_gen_list, tr("按行拆分成多条", "Split into lines")) {
@@ -1187,6 +1189,7 @@ private fun ItemMenu(item: ClipItem, onDismiss: () -> Unit) {
         MenuState.Note -> TextEditDialog(tr("备注", "Note"), item.note ?: "", singleLine = true, allowEmpty = true) { t -> if (t != null) ClipStore.setNote(item.id, t); onDismiss() }
         MenuState.Group -> GroupPickerDialog(item.groupId) { gid, chosen -> if (chosen) ClipStore.setGroup(listOf(item.id), gid); onDismiss() }
         is MenuState.Transform -> TransformDialog(s.text, onDismiss)
+        is MenuState.Library -> SaveToLibraryDialog(s.text) { onDismiss() }
     }
 }
 

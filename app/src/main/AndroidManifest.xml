@@ -71,6 +71,72 @@
             </intent-filter>
         </activity>
 
+        <!-- 存进文库：小弹窗。选中文字菜单里的“存进文库”是下面的 alias，文库功能打开时才启用 -->
+        <activity
+            android:name=".LibrarySaveActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:label="@string/save_to_library"
+            android:taskAffinity=""
+            android:theme="@style/SheetTheme"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity-alias
+            android:name=".SaveToLibraryAlias"
+            android:enabled="false"
+            android:exported="true"
+            android:label="@string/save_to_library"
+            android:targetActivity=".LibrarySaveActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- 小部件、常驻通知点了某一条：复制（隐藏的先验证）。没有界面 -->
+        <activity
+            android:name=".WidgetActionActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay" />
+
+        <!-- 小部件：选显示什么 -->
+        <activity
+            android:name=".WidgetConfigActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:taskAffinity=""
+            android:theme="@style/SheetTheme">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <receiver
+            android:name=".ClipWidget"
+            android:exported="true"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/clip_widget_info" />
+        </receiver>
+
+        <!-- 开机、更新后恢复悬浮球与常驻通知 -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -116,7 +182,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Floating bubble that opens the clipboard history panel on top of other apps" />
+                android:value="Floating bubble that opens the clipboard history panel on top of other apps, and an optional persistent notification listing recently copied text" />
         </service>
 
         <!-- 自动备份（系统定时叫醒） -->

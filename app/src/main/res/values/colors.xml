@@ -2,4 +2,10 @@
 <resources>
     <color name="launcher_bg">#EAF2FF</color>
     <color name="window_bg">#F6F7FA</color>
+    <!-- 桌面小部件：跟系统动态取色（Android 12+） -->
+    <color name="widget_bg">@android:color/system_neutral1_50</color>
+    <color name="widget_card">@android:color/system_neutral1_10</color>
+    <color name="widget_text">@android:color/system_neutral1_900</color>
+    <color name="widget_sub">@android:color/system_neutral2_600</color>
+    <color name="widget_accent">@android:color/system_accent1_600</color>
 </resources>

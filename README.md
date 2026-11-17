@@ -7,7 +7,7 @@
 **给接了键盘的安卓平板，补上它一直缺的那个 Win + V。**
 
 一款面向 **Android 平板 + 实体键盘** 的悬浮剪贴板历史管理器（Clipboard Manager）<br>
-后台自动记录 · 快捷键唤起悬浮面板 · 多选合并粘贴 · 拆开挑选 · 变换后粘贴 · 拼音搜索 · 完全离线
+后台自动记录 · 快捷键唤起悬浮面板 · 看板娘悬浮球 · 多选合并粘贴 · 拆开挑选 · 变换后粘贴 · 文库 · 拼音搜索 · 完全离线
 
 ![Android](https://img.shields.io/badge/Android-14%2B-3DDC84?logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?logo=kotlin&logoColor=white)
@@ -157,6 +157,57 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 
 ---
 
+## 0.7 新增：看板娘悬浮球、文库、通知栏与小部件
+
+### 卡卡：住在屏幕边上的悬浮球
+
+<img src="docs/screenshots/kaka-wave.webp" width="120" align="right" alt="卡卡招手">
+
+没有键盘、只用手指的时候，点屏幕边上的卡卡就能打开面板。她是一只文件夹猫娘：复制时接住卡片，粘贴时把卡片抛出去，查看隐藏内容前捂上眼睛，暂停记录时去睡觉；没人理她时会随机招手、打哈欠、蹦一下。
+
+- **点一下**：打开 / 关闭面板；**按住拖动**：换位置，松手贴到左边或右边（也可以设成“随意摆放”）
+- **长按**：环形控制台，手指滑到一项松手就执行——**最近 / 收藏**（再滑到某一条，直接贴进输入框）、暂停 / 恢复记录、今日隐藏、打开随贴
+- 3 秒不动就缩到屏幕边探头、变淡；**看视频、玩游戏全屏时自动藏起来**
+- 不想要看板娘，也可以换成一个圆形小图标；大小、收起时的透明度都能调
+- 开着增强模式时不需要悬浮窗权限；没开时用悬浮窗权限 + 前台服务，开机后自动恢复
+
+<p align="center">
+<img src="docs/screenshots/kaka-phone.jpg" width="30%" alt="卡卡在屏幕边上">
+<img src="docs/screenshots/kaka-docked.jpg" width="30%" alt="收起后在边上探头">
+<img src="docs/screenshots/kaka-radial.jpg" width="30%" alt="长按：环形控制台，滑到“最近”展开最近 5 条">
+</p>
+
+### 文库：长文字放这里，用时挑一段贴
+
+读书摘抄、写作素材、合同条款、常用的大段说明……这些东西不适合混在剪贴板记录里，又经常只需要其中一段。文库按**文集**整理，每篇可以记下书名、作者和链接。
+
+- **存进来**：在任意应用里选中文字 › **存进文库**；分享文字给随贴时选“存进文库”；记录的 ⋮ 菜单 › 存进文库；或者**导入 txt / md 文件**（可多选，GBK 编码的老文件也不会乱码）
+- **读**：大字号阅读，选中一段后可以 复制 / 存为记录 / 加入常用语；几十万字的长篇也能流畅滚动
+- **搜**：跨篇章全文搜索，结果显示命中前后的文字，点一下跳到那里并标黄
+- **贴**：悬浮面板多了一个“文库”标签，打开一篇就是**拆开挑选**，选中哪段贴哪段；长篇分块翻页。可选在后面附上“——《书名》作者”
+
+<p align="center">
+<img src="docs/screenshots/library.jpg" width="30%" alt="文库：按文集整理">
+<img src="docs/screenshots/library-read.jpg" width="30%" alt="阅读页">
+<img src="docs/screenshots/library-search.jpg" width="30%" alt="全文搜索">
+</p>
+
+<p align="center"><img src="docs/screenshots/panel-library.jpg" width="820" alt="悬浮面板里打开文库的一篇，拆开挑选其中一段"></p>
+
+### 通知栏与桌面小部件
+
+不打开随贴也能拿到最近复制的内容：
+
+- **常驻通知**（可选）：下拉通知栏，最近 3 条各有一个按钮，点一下就复制；隐藏的内容不会出现在通知里，锁屏上也只显示“随贴”
+- **桌面小部件**：显示最近复制的，也可以选收藏或某个分组；点一条就复制，隐藏的条目先验证身份；跟系统壁纸取色，深浅色都有
+
+<p align="center">
+<img src="docs/screenshots/widget.jpg" width="56%" alt="桌面小部件（浅色 / 深色）">
+<img src="docs/screenshots/notify.jpg" width="26%" alt="通知栏与小部件设置">
+</p>
+
+---
+
 ## 功能一览
 
 **收**
@@ -171,6 +222,7 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 - 置顶、常用语、**分组**统一放在“收藏”页；置顶的不受条数上限影响，“清空”也不会删
 - **回收站**：删除的、超出上限的记录保留 30 天；刚删掉时屏幕上方有 5 秒“撤销”
 - **导入 / 导出 / 自动备份**：可以设密码加密，自动备份按天或按周写到你选的文件夹（可以选网盘同步目录）
+- **文库**：长文字按文集整理，导入 txt / md，全文搜索，粘贴时挑其中一段
 
 **找**
 - 面板弹出后**直接打字就搜**，不用先点搜索框；命中的字会标黄
@@ -192,7 +244,8 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 **不打扰**
 - 面板**不抢输入框焦点，不弹输入法**；拖动移动，右下角缩放，大小和位置都会记住
 - 关闭方式逐项可选：选中后收起 / Esc / 点空白处 / 再按快捷键 / 切换应用
-- 三种唤起方式：快捷键、桌面图标（可设为直接弹面板）、通知栏快捷开关
+- 多种唤起方式：快捷键、**悬浮球卡卡**、桌面图标（可设为直接弹面板）、通知栏快捷开关；**常驻通知**和**桌面小部件**里点一下直接复制
+- **暂停记录**：临时不想被记下来时，在设置或悬浮球的控制台里一键暂停（卡卡会去睡觉），主界面顶部会提示
 - **简洁模式**只留记录、搜索、粘贴、收藏；**全能模式**打开全部功能，也可以逐项开关
 - 中英文界面，深色 / 浅色主题
 
@@ -289,6 +342,7 @@ Windows 早就有 Win + V，macOS 的剪贴板工具多得能开一条街，安�
 
 ## 更新记录
 
+- **v0.7.0**　看板娘悬浮球卡卡（长按环形控制台）、文库（文集、导入 txt / md、全文搜索、面板里拆开挑选）、桌面小部件、常驻通知、暂停记录
 - **v0.6.2**　悬浮面板重做：和主界面同一套样式，搜索命中的字标黄，变换后粘贴改成面板内的一页；手机上也是悬浮小窗
 - **v0.6.1**　主界面重做：动作条 / 动作轮分工、变换弹窗、详情视图，设置各页逐页重新设计
 - **v0.6.0**　改用数据库、回收站、分组、备份、隐藏内容、依次粘贴、变换后粘贴、简洁 / 全能模式、中英文界面
@@ -340,6 +394,9 @@ app/src/main/java/com/mistpeaklab/clipdock/
 ├── ClipService.kt          无障碍服务：后台记录（触发判断 + 焦点探针）、全局快捷键、自动粘贴
 ├── PanelHost.kt            按权限档位决定面板怎么显示；剪贴板读写
 ├── PanelController.kt      悬浮面板：列表、搜索、多选、变换页、拖动缩放、键盘操作
+├── LibraryStore.kt / LibraryPage.kt / LibrarySaveActivity.kt  文库：存储、主界面文库页（阅读、编辑、搜索）、“存进文库”小弹窗
+├── ClipWidget.kt           桌面小部件、点小部件 / 通知里的一条复制
+├── floatball/              悬浮球：卡卡的动画（动画 WebP）、贴边与拖动、环形控制台、前台服务与常驻通知
 ├── PiecePicker.kt          拆开挑选：像 Word 一样自由选择文字（自绘选区、光标、手柄）
 ├── PasteFly.kt             粘贴动画：卡片飞向输入框光标
 ├── PasteQueue.kt / Undo.kt 依次粘贴、删除后撤销（屏幕上方的小条）
@@ -368,7 +425,6 @@ app/src/main/java/com/mistpeaklab/clipdock/
 - **云同步、多设备互传**：违背“不联网”这条底线
 - **图片和文件**：复杂度翻好几倍，而这里的场景几乎全是文字
 - **AI 改写、翻译**：那是另一个产品
-- **常驻悬浮球**：快捷键加通知栏开关已经够了，屏幕上不需要多一个东西
 
 如果你觉得某个功能真的该有，欢迎提 Issue，理由能说服“它让挑一条贴进去更快”就行。
 
@@ -388,6 +444,9 @@ On Android, `Ctrl + V` only pastes the latest copy. Reaching older items means s
 - **Transform before pasting**: remove line breaks, change case, space out CJK and Latin text, strip link tracking parameters, extract numbers / links / e-mails and more; the original stays untouched
 - **Paste queue**: select several items and each paste gives you the next one — handy for filling forms
 - **Collect mode**, **content-type actions**, **hidden items** (encrypted, revealed after fingerprint / screen-lock verification), **trash** with 30-day recovery, **groups**, **notes**, **encrypted backups**
+- **Kaka, the floating bubble**: a folder cat-girl on the edge of the screen — tap for the panel, long-press for a radial menu (slide to a recent or starred item to paste it, pause recording, hide for today); she catches what you copy, throws what you paste, and hides when a video or game goes full screen
+- **Library** for long texts: collections, import txt / md (GBK too), full-text search, and paste just the paragraph you need from the panel
+- **Home-screen widget** and an optional **persistent notification**: tap a recent item to copy it
 - **Simple / Full modes**: start with just history, search, paste and favourites, turn on the rest whenever you like
 - **Fully offline**: no `INTERNET` permission, text only, stored locally
 

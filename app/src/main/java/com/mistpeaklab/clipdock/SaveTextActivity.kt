@@ -19,6 +19,13 @@ class SaveTextActivity : Activity() {
             else -> "" to null
         }
         val s = text?.toString()
+        // 文库打开时，分享进来的文字先让用户选：存为记录，还是存进文库
+        if (!s.isNullOrBlank() && trigger == "SHARE" && Features.isOn(this, Feature.LIBRARY)) {
+            startActivity(Intent(this, LibrarySaveActivity::class.java).putExtra(LibrarySaveActivity.EXTRA_TEXT, s)
+                .putExtra(LibrarySaveActivity.EXTRA_CHOOSE, true).putExtra(LibrarySaveActivity.EXTRA_FROM, callerPackage()))
+            finish()
+            return
+        }
         if (s.isNullOrBlank()) {
             Toast.makeText(this, tr("没有可以保存的文字", "There is no text to save"), Toast.LENGTH_SHORT).show()
         } else {

@@ -70,7 +70,11 @@ enum class Feature(
         "把收藏的内容分到不同的组里，面板里可以直接切到某一组。",
         "Sort favourites into groups; the panel gets a tab for each group.",
     ),
-    LIBRARY("library", "文库", "Library", "后续版本提供。", "Coming in a later version.", reserved = true),
+    LIBRARY(
+        "library", "文库", "Library",
+        "存放读书摘抄、素材之类的长文字，分文集整理；面板里打开一篇，拆开挑选其中一段粘贴。选中文字、分享时可以直接存进文库，也能导入 txt / md。",
+        "Keep long texts — book excerpts, reference material — in collections. Open one in the panel and paste just the part you need. Save selected or shared text straight into it, or import txt / md files.",
+    ),
     TRASH(
         "trash", "回收站", "Trash",
         "删除的记录先进回收站，30 天内可以找回。关闭后删除即彻底删除。",

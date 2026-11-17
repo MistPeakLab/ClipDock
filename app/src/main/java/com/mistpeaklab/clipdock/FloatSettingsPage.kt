@@ -69,6 +69,9 @@ fun FloatSettingsPage(tick: Int, onBack: () -> Unit) {
                 Choice(tr("大小", "Size"), listOf(tr("小", "S"), tr("中", "M"), tr("大", "L")), prefs.floatSize, icon = R.drawable.ic_gen_grid) {
                     prefs.floatSize = it; changed(true)
                 }
+                Toggle(tr("全屏时隐藏", "Hide in full screen"),
+                    tr("看视频、玩游戏等全屏画面时自动藏起来，退出全屏再出现", "Hides while a video or game is full screen, comes back afterwards"),
+                    prefs.floatHideFullscreen, icon = R.drawable.ic_gen_grid) { prefs.floatHideFullscreen = it; changed(true) }
                 Choice(tr("位置", "Placement"), listOf(tr("贴边", "Snap to edge"), tr("随意摆放", "Anywhere")),
                     if (prefs.floatFree) 1 else 0, icon = R.drawable.ic_gen_pick,
                     sub = if (prefs.floatFree) tr("拖到哪就停在哪，不会缩到边上", "Stays where you drop it")
@@ -129,6 +132,55 @@ private fun MascotPreview() {
                     "A folder cat-girl living on the edge of your screen. She catches what you copy, throws what you paste, and naps while recording is paused. Tap her."),
                 fontSize = 12.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+// ---------------- 通知栏与小部件 ----------------
+
+@Composable
+fun NotifySettingsPage(tick: Int, onBack: () -> Unit) {
+    val ctx = LocalContext.current
+    val prefs = remember { Prefs(ctx) }
+    var v by remember { mutableIntStateOf(0) }
+    val granted = remember(tick, v) {
+        ctx.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+    val ask = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { v++; FloatBall.sync(ctx) }
+    key(v) {
+        PageColumn {
+            SubHeader(tr("通知栏与小部件", "Notification & widget"), onBack, R.drawable.ic_gen_history,
+                tr("不打开随贴也能拿到最近复制的内容：通知栏里点一下复制，或者在桌面放一个小部件。",
+                    "Reach recent items without opening ClipDock: tap one in the notification shade, or put a widget on the home screen."))
+            Group(tr("常驻通知", "Persistent notification")) {
+                Toggle(tr("通知栏显示最近 3 条", "Show the latest 3 in the shade"),
+                    if (prefs.notifEnabled && !granted) tr("还没允许随贴发通知，点这里允许", "Notifications are not allowed yet — tap to allow")
+                    else tr("下拉通知栏，点下面的按钮就复制那一条；隐藏的内容不会出现在通知里", "Pull down the shade and tap a button to copy that item. Hidden items never appear there."),
+                    prefs.notifEnabled, icon = R.drawable.ic_gen_history) { on ->
+                    prefs.notifEnabled = on
+                    if (on && !granted) runCatching { ask.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+                    v++
+                    FloatBall.sync(ctx)
+                }
+                if (prefs.notifEnabled && !granted) Clickable(tr("允许通知", "Allow notifications"), null, tr("去设置", "Settings"), icon = R.drawable.ic_gen_shield) {
+                    runCatching {
+                        ctx.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                }
+            }
+            Group(tr("桌面小部件", "Home-screen widget")) {
+                Clickable(tr("添加到桌面", "Add to home screen"),
+                    tr("显示最近复制的（也可以选收藏或某个分组），点一条就复制。也可以长按桌面空白处 › 小部件 › 随贴", "Shows recent items (or favourites / a group); tap one to copy. Or long-press the home screen › Widgets › ClipDock"),
+                    tr("添加", "Add"), icon = R.drawable.ic_gen_grid) {
+                    val mgr = android.appwidget.AppWidgetManager.getInstance(ctx)
+                    val ok = mgr != null && mgr.isRequestPinAppWidgetSupported &&
+                        mgr.requestPinAppWidget(android.content.ComponentName(ctx, ClipWidget::class.java), null, null)
+                    if (!ok) ctx.toast(tr("这个桌面不支持直接添加，请长按桌面空白处 › 小部件 › 随贴", "Your launcher can't add it directly — long-press the home screen › Widgets › ClipDock"))
+                }
+            }
         }
     }
 }

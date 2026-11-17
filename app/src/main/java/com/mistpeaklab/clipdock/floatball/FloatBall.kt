@@ -65,22 +65,31 @@ object FloatBall {
         val hidden = p.floatHiddenUntil > System.currentTimeMillis()
         scheduleUnhide(app, if (p.floatEnabled && hidden) p.floatHiddenUntil else 0L)
         val svc = ClipService.instance
+        val wantBall = p.floatEnabled && !hidden
+        // 悬浮球要由常驻服务承载：没有无障碍、但有悬浮窗权限
+        val ballInService = wantBall && svc == null && Settings.canDrawOverlays(app)
+        val needService = ballInService || p.notifEnabled
         when {
-            !p.floatEnabled || hidden -> { destroy(); FloatService.stop(app) }
-            svc != null -> {
-                FloatService.stop(app)
-                if (ctrlHost !== svc || ctrl == null) { destroy(); create(svc, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY) }
+            !wantBall -> destroy()
+            svc != null -> if (ctrlHost !== svc || ctrl == null) { destroy(); create(svc, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY) }
+            ballInService -> {
+                val fs = FloatService.instance
+                if (fs == null) destroy()   // 服务起来后会调 attach
+                else if (ctrlHost !== fs || ctrl == null) { destroy(); create(fs, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY) }
             }
-            Settings.canDrawOverlays(app) -> if (ctrlHost !is FloatService || ctrl == null) { destroy(); FloatService.start(app) }
-            else -> { destroy(); FloatService.stop(app) }
+            else -> destroy()
         }
+        if (needService) { FloatService.start(app); FloatService.refresh(app) } else FloatService.stop(app)
     }
 
     /** 设置改了样式、大小：重建 */
-    fun rebuild(ctx: Context) = onMain { destroy(); FloatService.stop(ctx.applicationContext); sync(ctx) }
+    fun rebuild(ctx: Context) = onMain { destroy(); sync(ctx) }
 
     /** 暂停记录切换后刷新卡卡的基础状态（睡觉 / 醒着） */
-    fun refreshState() = onMain { ctrl?.refreshBase() }
+    fun refreshState() = onMain {
+        ctrl?.refreshBase()
+        FloatService.instance?.let { FloatService.refresh(it) }
+    }
 
     /** 今日隐藏：到明天 0 点自动恢复 */
     fun hideToday(ctx: Context) {
@@ -97,13 +106,8 @@ object FloatBall {
         sync(ctx)
     }
 
-    internal fun attach(svc: FloatService) = onMain {
-        // 无障碍宿主优先：它在的话前台服务没必要存在
-        if (ClipService.instance != null) { FloatService.stop(svc); sync(svc); return@onMain }
-        if (ctrlHost === svc && ctrl != null) return@onMain
-        destroy()
-        create(svc, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
-    }
+    /** 常驻服务起来了：按设置决定它要不要承载悬浮球（无障碍宿主优先）、要不要继续运行 */
+    internal fun attach(svc: FloatService) = onMain { sync(svc) }
 
     internal fun detach(host: Context) = onMain { if (ctrlHost === host) destroy() }
 
@@ -176,6 +180,8 @@ internal class FloatController(private val host: Context, private val type: Int)
     /** 正在播一次性的反应动作（播完回到基础状态） */
     private var reacting = false
     private var destroyed = false
+    /** 别的应用正在全屏（状态栏藏起来了）：悬浮球暂时隐藏、不接收触摸 */
+    private var fullscreen = false
 
     private val sprite: SpriteView? = if (mascot) SpriteView(host) else null
     private val icon: View? = if (mascot) null else BallIconView(host)
@@ -214,7 +220,7 @@ internal class FloatController(private val host: Context, private val type: Int)
     private val idleRun = object : Runnable {
         override fun run() {
             if (destroyed) return
-            if (!dragging && radial == null && !reacting && !prefs.capturePaused) playOnce(pick(idlePool))
+            if (!dragging && radial == null && !reacting && !fullscreen && !prefs.capturePaused) playOnce(pick(idlePool))
             scheduleIdle()
         }
     }
@@ -232,6 +238,7 @@ internal class FloatController(private val host: Context, private val type: Int)
     fun show(): Boolean {
         (sprite ?: icon)?.let { root.addView(it, FrameLayout.LayoutParams(size, size)) }
         root.contentDescription = tr("随贴悬浮球：点按打开面板，长按打开控制台", "ClipDock bubble: tap for the panel, long-press for the menu")
+        if (prefs.floatHideFullscreen) addProbe()
         place()
         if (runCatching { wm.addView(root, lp) }.isFailure) return false
         sprite?.mirrored = side == 1
@@ -249,6 +256,38 @@ internal class FloatController(private val host: Context, private val type: Int)
         snapAnim?.cancel()
         radial?.dismissNow()
         runCatching { wm.removeViewImmediate(root) }
+        if (probe.isAttachedToWindow) runCatching { wm.removeViewImmediate(probe) }
+    }
+
+    // ---------------- 全屏时隐藏 ----------------
+
+    /**
+     * 探针：一个 1 像素宽、和屏幕一样高、看不见也不接收触摸的窗口，从屏幕最顶上开始（盖住状态栏的位置）。
+     * 系统通过窗口边衬告诉它状态栏在不在、显不显示：状态栏存在但被藏起来了（看视频、玩游戏），就是别的应用在全屏。
+     * 悬浮球窗口本身太小、离状态栏远，拿不到状态栏的边衬，所以另开这一个。
+     * 判断不出来（比如没有状态栏）时一律当作不是全屏，宁可不藏，也不能把球藏丢。
+     */
+    private val probe = View(host)
+
+    private fun addProbe() {
+        val p = WindowManager.LayoutParams(
+            1, WindowManager.LayoutParams.MATCH_PARENT, type,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSPARENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            fitInsetsTypes = 0
+            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            windowAnimations = 0
+        }
+        probe.setOnApplyWindowInsetsListener { _, ins ->
+            val bars = android.view.WindowInsets.Type.statusBars()
+            val exists = ins.getInsetsIgnoringVisibility(bars).top > 0
+            val full = exists && !ins.isVisible(bars)
+            if (full != fullscreen) main.post { setFullscreen(full) }
+            ins
+        }
+        runCatching { wm.addView(probe, p) }
     }
 
     // ---------------- 位置 ----------------
@@ -351,8 +390,27 @@ internal class FloatController(private val host: Context, private val type: Int)
         }
     }
 
+    private fun setFullscreen(full: Boolean) {
+        if (destroyed || full == fullscreen) return
+        fullscreen = full
+        if (full) {
+            radial?.dismissNow()
+            radial = null
+            main.removeCallbacks(peekRun)
+            sprite?.pause()
+            (sprite ?: icon)?.visibility = View.INVISIBLE
+            lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        } else {
+            (sprite ?: icon)?.visibility = View.VISIBLE
+            lp.flags = lp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+            reacting = false
+            playBase()
+        }
+        place()
+    }
+
     fun react(m: Mascot) {
-        if (destroyed || dragging || radial != null) return
+        if (destroyed || dragging || radial != null || fullscreen) return
         if (sprite == null) { pulse(); return }
         // 睡觉时只有“打开隐藏内容”会让她惊醒捂眼；其他动静不吵醒她
         if (prefs.capturePaused && m != Mascot.SHY) return
@@ -481,7 +539,7 @@ internal class FloatController(private val host: Context, private val type: Int)
 
     private fun onRadialClosed(reaction: Mascot?, then: (() -> Unit)?) {
         radial = null
-        if (destroyed) return
+        if (destroyed || fullscreen) return
         (sprite ?: icon)?.visibility = View.VISIBLE
         place()
         when {
@@ -513,7 +571,7 @@ internal class FloatController(private val host: Context, private val type: Int)
                 reaction = if (paused) Mascot.WAVE else null) {
                 prefs.capturePaused = !paused
                 Toast.makeText(host, if (paused) tr("已恢复记录", "Recording resumed") else tr("已暂停记录，复制的内容不会记下来", "Recording paused"), Toast.LENGTH_SHORT).show()
-                refreshBase()
+                FloatBall.refreshState()
             },
             RadialItem(R.drawable.ic_gen_close, tr("今日隐藏", "Hide today"), reaction = Mascot.WAVE) {
                 // 先招手告别，再消失

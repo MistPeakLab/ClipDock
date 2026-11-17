@@ -6,4 +6,7 @@
     <string name="save_to_clipdock">Save to ClipDock</string>
     <string name="shortcut_main">Main screen</string>
     <string name="a11y_desc">Turns on enhanced mode: it records what you copy in the background, opens the floating panel with a keyboard hotkey (Win+V by default) without stealing focus, and can paste the selected item straight into the text field. Everything stays on this device; the app has no internet permission.</string>
+    <string name="save_to_library">Save to library</string>
+    <string name="widget_label">ClipDock recent</string>
+    <string name="widget_desc">Recently copied text; tap to copy</string>
 </resources>
