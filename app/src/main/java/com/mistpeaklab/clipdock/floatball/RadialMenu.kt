@@ -67,9 +67,9 @@ class RadialMenu(
     private val dens = ctx.resources.displayMetrics.density
     private fun dp(v: Float) = v * dens
 
-    /** 控制台里的卡卡比悬浮球大一圈：至少 120dp，明显大过按钮 */
-    private val big = maxOf(ballSize * 1.6f, dp(120f)).toInt()
-    private val radius = dp(96f) + big * 0.28f
+    /** 控制台里的卡卡是悬浮球的 2.2 倍（至少 140dp），明显大过按钮 */
+    private val big = maxOf(ballSize * 2.2f, dp(140f)).toInt()
+    private val radius = dp(96f) + big * 0.22f
     private val bubble = dp(26f)
     private val spread = Math.toRadians(if (items.size <= 3) 110.0 else 150.0)
     private val inward = if (dockLeft) 0.0 else Math.PI
@@ -202,7 +202,13 @@ class RadialMenu(
         }
     }
 
-    private val chipMax get() = dp(170f)
+    /** 第二列最宽多少：最多 170dp；手机竖屏上卡卡变大后，按内圈外侧剩下的宽度收窄 */
+    private val chipMax: Float get() {
+        val b = wm.currentWindowMetrics.bounds
+        val edge = radius + bubble + dp(18f)
+        val room = if (dockLeft) b.right - dp(12f) - (mx + edge) else (mx - edge) - (b.left + dp(12f))
+        return room.coerceIn(dp(96f), dp(170f))
+    }
 
     /** 自己截断（不依赖 TextUtils.ellipsize）：只取第一行，放不下就加省略号 */
     private fun chipLabel(k: Int): String {
